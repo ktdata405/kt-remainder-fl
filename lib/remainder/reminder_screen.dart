@@ -32,6 +32,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
   final ReminderService _service = ReminderService.instance;
   StreamSubscription<Reminder>? _webDueReminderSub;
   StreamSubscription<int>? _customSnoozeSub;
+  final Set<int> _busyReminderIds = <int>{};
   bool _isInitializing = true;
   bool _isReloading = false;
   bool _isServiceReady = false;
@@ -141,13 +142,50 @@ class _ReminderScreenState extends State<ReminderScreen> {
     }
   }
 
+  void _setReminderBusy(int id, bool busy) {
+    if (!mounted) return;
+    setState(() {
+      if (busy) {
+        _busyReminderIds.add(id);
+      } else {
+        _busyReminderIds.remove(id);
+      }
+    });
+  }
+
+  void _replaceReminderLocally(int id, Reminder Function(Reminder current) mapFn) {
+    if (!mounted) return;
+    setState(() {
+      _reminders = _reminders
+          .map((r) => r.id == id ? mapFn(r) : r)
+          .toList(growable: false);
+    });
+  }
+
   Future<void> _cancelReminder(int id) async {
     if (!_isServiceReady) return;
+    if (_busyReminderIds.contains(id)) return;
+    final previous = List<Reminder>.from(_reminders);
+    _setReminderBusy(id, true);
+    _replaceReminderLocally(
+      id,
+      (r) => Reminder(
+        id: r.id,
+        title: r.title,
+        body: r.body,
+        scheduledTime: r.scheduledTime,
+        repeatFrequency: r.repeatFrequency,
+        isActive: false,
+      ),
+    );
     try {
       await _service.cancelReminder(id);
-      await _reload();
+      unawaited(_reload());
     } catch (e) {
+      if (mounted) setState(() => _reminders = previous);
       _snack('Cancel failed: $e');
+    } finally {
+      _setReminderBusy(id, false);
     }
   }
 
@@ -163,41 +201,108 @@ class _ReminderScreenState extends State<ReminderScreen> {
 
   Future<void> _completeReminder(int id) async {
     if (!_isServiceReady) return;
+    if (_busyReminderIds.contains(id)) return;
+    final previous = List<Reminder>.from(_reminders);
+    _setReminderBusy(id, true);
+    _replaceReminderLocally(
+      id,
+      (r) => Reminder(
+        id: r.id,
+        title: r.title,
+        body: r.body,
+        scheduledTime: r.scheduledTime,
+        repeatFrequency: r.repeatFrequency,
+        isActive: false,
+      ),
+    );
     try {
       await _service.completeReminder(id);
-      await _reload();
+      unawaited(_reload());
       _snack('Reminder marked as completed');
     } catch (e) {
+      if (mounted) setState(() => _reminders = previous);
       _snack('Complete failed: $e');
+    } finally {
+      _setReminderBusy(id, false);
     }
   }
 
   Future<void> _snoozeReminder(int id, Duration by) async {
     if (!_isServiceReady) return;
+    if (_busyReminderIds.contains(id)) return;
+    final previous = List<Reminder>.from(_reminders);
+    final target = DateTime.now().add(by);
+    _setReminderBusy(id, true);
+    _replaceReminderLocally(
+      id,
+      (r) => Reminder(
+        id: r.id,
+        title: r.title,
+        body: r.body,
+        scheduledTime: target,
+        repeatFrequency: r.repeatFrequency,
+        isActive: true,
+      ),
+    );
     try {
       await _service.snoozeReminder(id, by: by);
-      await _reload();
+      unawaited(_reload());
       final mins = by.inMinutes;
       final label = mins < 60 ? '$mins minutes' : '${(mins / 60).round()} hour';
       _snack('Snoozed for $label');
     } catch (e) {
+      if (mounted) setState(() => _reminders = previous);
       _snack('Snooze failed: $e');
+    } finally {
+      _setReminderBusy(id, false);
     }
   }
 
   Future<void> _snoozeTomorrow(int id) async {
     if (!_isServiceReady) return;
+    if (_busyReminderIds.contains(id)) return;
+    final previous = List<Reminder>.from(_reminders);
+    final source = _reminders.where((r) => r.id == id).cast<Reminder?>().firstWhere(
+          (r) => r != null,
+          orElse: () => null,
+        );
+    final now = DateTime.now();
+    final target = source == null
+        ? DateTime(now.year, now.month, now.day + 1, now.hour, now.minute)
+        : DateTime(
+            now.year,
+            now.month,
+            now.day + 1,
+            source.scheduledTime.hour,
+            source.scheduledTime.minute,
+          );
+    _setReminderBusy(id, true);
+    _replaceReminderLocally(
+      id,
+      (r) => Reminder(
+        id: r.id,
+        title: r.title,
+        body: r.body,
+        scheduledTime: target,
+        repeatFrequency: r.repeatFrequency,
+        isActive: true,
+      ),
+    );
     try {
       await _service.snoozeReminderTomorrow(id);
-      await _reload();
+      unawaited(_reload());
       _snack('Snoozed until tomorrow');
     } catch (e) {
+      if (mounted) setState(() => _reminders = previous);
       _snack('Snooze failed: $e');
+    } finally {
+      _setReminderBusy(id, false);
     }
   }
 
   Future<void> _snoozeCustom(int id) async {
     if (!_isServiceReady) return;
+    if (_busyReminderIds.contains(id)) return;
     final now = DateTime.now();
     final date = await showDatePicker(
       context: context,
@@ -212,12 +317,28 @@ class _ReminderScreenState extends State<ReminderScreen> {
     );
     if (!mounted || time == null) return;
     final when = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    final previous = List<Reminder>.from(_reminders);
+    _setReminderBusy(id, true);
+    _replaceReminderLocally(
+      id,
+      (r) => Reminder(
+        id: r.id,
+        title: r.title,
+        body: r.body,
+        scheduledTime: when,
+        repeatFrequency: r.repeatFrequency,
+        isActive: true,
+      ),
+    );
     try {
       await _service.snoozeReminderUntil(id, when);
-      await _reload();
+      unawaited(_reload());
       _snack('Snoozed to ${SettingsService.instance.formatDateTime(when)}');
     } catch (e) {
+      if (mounted) setState(() => _reminders = previous);
       _snack('Custom snooze failed: $e');
+    } finally {
+      _setReminderBusy(id, false);
     }
   }
 
@@ -304,6 +425,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
     return _ListScreen(
       reminders: _reminders,
       isReloading: _isReloading,
+      busyReminderIds: _busyReminderIds,
       fetchError: _fetchError,
       onRefresh: _reload,
       onCancel: _cancelReminder,
@@ -367,6 +489,7 @@ class _ListScreen extends StatefulWidget {
   const _ListScreen({
     required this.reminders,
     required this.isReloading,
+    required this.busyReminderIds,
     this.fetchError,
     required this.onRefresh,
     required this.onCancel,
@@ -381,6 +504,7 @@ class _ListScreen extends StatefulWidget {
 
   final List<Reminder> reminders;
   final bool isReloading;
+  final Set<int> busyReminderIds;
   final String? fetchError;
   final Future<void> Function() onRefresh;
   final Future<void> Function(int) onCancel;
@@ -535,8 +659,6 @@ class _ListScreenState extends State<_ListScreen> {
                       ),
                     ],
                   ),
-                  if (widget.isReloading)
-                    const LinearProgressIndicator(minHeight: 2, color: Colors.white70),
                   const SizedBox(height: 10),
                   Container(
                     padding: const EdgeInsets.all(4),
@@ -580,7 +702,13 @@ class _ListScreenState extends State<_ListScreen> {
                           IconButton(
                             tooltip: 'Refresh',
                             onPressed: widget.isReloading ? null : widget.onRefresh,
-                            icon: const Icon(Icons.sync_rounded),
+                            icon: widget.isReloading
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.sync_rounded),
                           ),
                           IconButton(
                             tooltip: widget.isDark ? 'Light mode' : 'Dark mode',
@@ -599,14 +727,19 @@ class _ListScreenState extends State<_ListScreen> {
                             ? _FetchErrorState(error: widget.fetchError!, onRetry: widget.onRefresh)
                             : visibleReminders.isEmpty
                                 ? _EmptyState(onAdd: () => _openAddSheet(context))
-                                : ListView.builder(
+                                : ListView.separated(
                                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
                                     itemCount: visibleReminders.length,
+                                    separatorBuilder: (_, __) => const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 12),
+                                      child: Divider(height: 4, thickness: 0.8),
+                                    ),
                                     itemBuilder: (context, i) {
                                       final reminder = visibleReminders[i];
+                                      final isBusy = widget.busyReminderIds.contains(reminder.id);
                                       return Dismissible(
                                         key: ValueKey('reminder-${reminder.id}-${reminder.isActive}'),
-                                        direction: reminder.isActive
+                                        direction: reminder.isActive && !isBusy
                                             ? DismissDirection.endToStart
                                             : DismissDirection.none,
                                         confirmDismiss: (_) => _confirmCancel(context, reminder),
@@ -626,13 +759,14 @@ class _ListScreenState extends State<_ListScreen> {
                                         ),
                                         child: _ReminderCard(
                                           reminder: reminder,
+                                          isBusy: isBusy,
                                           onTap: reminder.isActive
                                               ? () => _openEditSheet(context, reminder)
                                               : null,
-                                          onComplete: reminder.isActive
+                                          onComplete: reminder.isActive && !isBusy
                                               ? () => widget.onComplete(reminder.id)
                                               : null,
-                                          onSnooze: reminder.isActive
+                                          onSnooze: reminder.isActive && !isBusy
                                               ? () => widget.onSnooze(reminder)
                                               : null,
                                         ),
@@ -663,12 +797,14 @@ class _ListScreenState extends State<_ListScreen> {
 class _ReminderCard extends StatelessWidget {
   const _ReminderCard({
     required this.reminder,
+    required this.isBusy,
     this.onTap,
     this.onComplete,
     this.onSnooze,
   });
 
   final Reminder reminder;
+  final bool isBusy;
   final VoidCallback? onTap;
   final VoidCallback? onComplete;
   final VoidCallback? onSnooze;
@@ -838,10 +974,31 @@ class _ReminderCard extends StatelessWidget {
                         ),
                         if (reminder.isActive) ...[
                           const SizedBox(height: 8),
+                          if (isBusy)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Row(
+                                children: [
+                                  const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Updating...',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: Colors.grey.shade700,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           Row(
                             children: [
                               TextButton.icon(
-                                onPressed: onSnooze,
+                                onPressed: isBusy ? null : onSnooze,
                                 icon: const Icon(Icons.snooze_rounded, size: 16),
                                 label: const Text('Snooze'),
                                 style: TextButton.styleFrom(
@@ -860,7 +1017,7 @@ class _ReminderCard extends StatelessWidget {
                               ),
                               const SizedBox(width: 8),
                               TextButton.icon(
-                                onPressed: onComplete,
+                                onPressed: isBusy ? null : onComplete,
                                 icon: const Icon(Icons.check_circle_rounded, size: 16),
                                 label: const Text('Complete'),
                                 style: TextButton.styleFrom(
