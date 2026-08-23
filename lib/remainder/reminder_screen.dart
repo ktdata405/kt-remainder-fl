@@ -108,32 +108,15 @@ class _ReminderScreenState extends State<ReminderScreen> {
   void _attachCustomSnoozeListener() {
     if (_customSnoozeSub != null) return;
     _customSnoozeSub = _service.customSnoozeRequestStream.listen((id) async {
-      Reminder? reminder;
-      for (final r in _reminders) {
-        if (r.id == id) {
-          reminder = r;
-          break;
-        }
-      }
-      if (reminder != null && mounted) {
-        await _showSnoozePicker(reminder);
-      }
+      if (!mounted) return;
+      await _showSnoozePickerForId(id);
     });
   }
 
   Future<void> _consumePendingCustomSnoozeRequest() async {
     final pendingId = await _service.consumePendingCustomSnoozeRequest();
     if (pendingId == null || !mounted) return;
-    Reminder? reminder;
-    for (final r in _reminders) {
-      if (r.id == pendingId) {
-        reminder = r;
-        break;
-      }
-    }
-    if (reminder != null) {
-      await _showSnoozePicker(reminder);
-    }
+    await _showSnoozePickerForId(pendingId);
   }
 
   void _validateConfiguration() {
@@ -239,6 +222,10 @@ class _ReminderScreenState extends State<ReminderScreen> {
   }
 
   Future<void> _showSnoozePicker(Reminder reminder) async {
+    await _showSnoozePickerForId(reminder.id);
+  }
+
+  Future<void> _showSnoozePickerForId(int reminderId) async {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -249,27 +236,27 @@ class _ReminderScreenState extends State<ReminderScreen> {
         final options = <({IconData icon, String label, VoidCallback onTap})>[
           (icon: Icons.snooze_rounded, label: '5 minutes', onTap: () {
             Navigator.of(ctx).pop();
-            _snoozeReminder(reminder.id, const Duration(minutes: 5));
+            _snoozeReminder(reminderId, const Duration(minutes: 5));
           }),
           (icon: Icons.snooze_rounded, label: '10 minutes', onTap: () {
             Navigator.of(ctx).pop();
-            _snoozeReminder(reminder.id, const Duration(minutes: 10));
+            _snoozeReminder(reminderId, const Duration(minutes: 10));
           }),
           (icon: Icons.snooze_rounded, label: '30 minutes', onTap: () {
             Navigator.of(ctx).pop();
-            _snoozeReminder(reminder.id, const Duration(minutes: 30));
+            _snoozeReminder(reminderId, const Duration(minutes: 30));
           }),
           (icon: Icons.schedule_rounded, label: '1 hour', onTap: () {
             Navigator.of(ctx).pop();
-            _snoozeReminder(reminder.id, const Duration(hours: 1));
+            _snoozeReminder(reminderId, const Duration(hours: 1));
           }),
           (icon: Icons.today_rounded, label: 'Tomorrow', onTap: () {
             Navigator.of(ctx).pop();
-            _snoozeTomorrow(reminder.id);
+            _snoozeTomorrow(reminderId);
           }),
           (icon: Icons.edit_calendar_rounded, label: 'Custom', onTap: () {
             Navigator.of(ctx).pop();
-            _snoozeCustom(reminder.id);
+            _snoozeCustom(reminderId);
           }),
         ];
 
@@ -777,19 +764,33 @@ class _ReminderCard extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Icon(Icons.access_time_rounded, size: 14, color: Colors.grey.shade600),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                _fmt(reminder.scheduledTime),
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: Colors.grey.shade700,
-                                ),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F766E).withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: const Color(0xFF0F766E).withValues(alpha: 0.30),
                               ),
                             ),
-                          ],
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.access_time_rounded,
+                                    size: 14, color: Color(0xFF0F766E)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _fmt(reminder.scheduledTime),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: const Color(0xFF0F766E),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 10),
                         Text(
@@ -842,9 +843,16 @@ class _ReminderCard extends StatelessWidget {
                               TextButton.icon(
                                 onPressed: onSnooze,
                                 icon: const Icon(Icons.snooze_rounded, size: 16),
-                                label: const Text('Snooze 10m'),
+                                label: const Text('Snooze'),
                                 style: TextButton.styleFrom(
                                   foregroundColor: const Color(0xFF0EA5E9),
+                                  backgroundColor: const Color(0xFF0EA5E9).withValues(alpha: 0.10),
+                                  side: BorderSide(
+                                    color: const Color(0xFF0EA5E9).withValues(alpha: 0.35),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   minimumSize: const Size(0, 32),
                                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -857,6 +865,13 @@ class _ReminderCard extends StatelessWidget {
                                 label: const Text('Complete'),
                                 style: TextButton.styleFrom(
                                   foregroundColor: const Color(0xFF19A766),
+                                  backgroundColor: const Color(0xFF19A766).withValues(alpha: 0.10),
+                                  side: BorderSide(
+                                    color: const Color(0xFF19A766).withValues(alpha: 0.35),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   minimumSize: const Size(0, 32),
                                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,

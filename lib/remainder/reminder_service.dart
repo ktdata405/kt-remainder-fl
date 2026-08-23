@@ -480,19 +480,12 @@ class ReminderService {
     if (actionId == null || actionId.isEmpty) return;
 
     try {
-      await _ensureWebUrlLoaded();
-      if (_webAppUrl.trim().isEmpty || _webAppUrl.contains('PASTE_YOUR')) return;
-
       final payloadData = _decodePayload(response.payload);
       final id = _payloadId(payloadData['id']);
       if (id == null) return;
 
-      if (actionId == _actionComplete) {
-        await _cancelRemoteById(id);
-        await _notifications.cancel(id).catchError((_) {});
-        return;
-      }
-
+      // Custom snooze only needs reminder id and should work even if remote
+      // configuration/network is temporarily unavailable.
       if (actionId == _actionSnoozeCustom) {
         await _notifications.cancel(id).catchError((_) {});
         final prefs = await SharedPreferences.getInstance();
@@ -500,6 +493,15 @@ class ReminderService {
         if (!_customSnoozeRequestController.isClosed) {
           _customSnoozeRequestController.add(id);
         }
+        return;
+      }
+
+      await _ensureWebUrlLoaded();
+      if (_webAppUrl.trim().isEmpty || _webAppUrl.contains('PASTE_YOUR')) return;
+
+      if (actionId == _actionComplete) {
+        await _cancelRemoteById(id);
+        await _notifications.cancel(id).catchError((_) {});
         return;
       }
 
