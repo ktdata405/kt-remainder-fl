@@ -31,6 +31,7 @@ class ReminderScreen extends StatefulWidget {
 class _ReminderScreenState extends State<ReminderScreen> {
   final ReminderService _service = ReminderService.instance;
   StreamSubscription<Reminder>? _webDueReminderSub;
+  StreamSubscription<int>? _customSnoozeSub;
   bool _isInitializing = true;
   bool _isReloading = false;
   bool _isServiceReady = false;
@@ -47,6 +48,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
   @override
   void dispose() {
     _webDueReminderSub?.cancel();
+    _customSnoozeSub?.cancel();
     super.dispose();
   }
 
@@ -80,8 +82,10 @@ class _ReminderScreenState extends State<ReminderScreen> {
       _validateConfiguration();
       await _service.initialize(webAppUrl: widget.webAppUrl);
       _attachWebDueReminderListener();
+      _attachCustomSnoozeListener();
       if (mounted) setState(() => _isServiceReady = true);
       await _reload();
+      await _consumePendingCustomSnoozeRequest();
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -99,6 +103,37 @@ class _ReminderScreenState extends State<ReminderScreen> {
     _webDueReminderSub = _service.webDueReminderStream.listen((reminder) {
       _snack('🔔 ${reminder.title} is due now');
     });
+  }
+
+  void _attachCustomSnoozeListener() {
+    if (_customSnoozeSub != null) return;
+    _customSnoozeSub = _service.customSnoozeRequestStream.listen((id) async {
+      Reminder? reminder;
+      for (final r in _reminders) {
+        if (r.id == id) {
+          reminder = r;
+          break;
+        }
+      }
+      if (reminder != null && mounted) {
+        await _showSnoozePicker(reminder);
+      }
+    });
+  }
+
+  Future<void> _consumePendingCustomSnoozeRequest() async {
+    final pendingId = await _service.consumePendingCustomSnoozeRequest();
+    if (pendingId == null || !mounted) return;
+    Reminder? reminder;
+    for (final r in _reminders) {
+      if (r.id == pendingId) {
+        reminder = r;
+        break;
+      }
+    }
+    if (reminder != null) {
+      await _showSnoozePicker(reminder);
+    }
   }
 
   void _validateConfiguration() {
@@ -143,6 +178,120 @@ class _ReminderScreenState extends State<ReminderScreen> {
     await _reload();
   }
 
+  Future<void> _completeReminder(int id) async {
+    if (!_isServiceReady) return;
+    try {
+      await _service.completeReminder(id);
+      await _reload();
+      _snack('Reminder marked as completed');
+    } catch (e) {
+      _snack('Complete failed: $e');
+    }
+  }
+
+  Future<void> _snoozeReminder(int id, Duration by) async {
+    if (!_isServiceReady) return;
+    try {
+      await _service.snoozeReminder(id, by: by);
+      await _reload();
+      final mins = by.inMinutes;
+      final label = mins < 60 ? '$mins minutes' : '${(mins / 60).round()} hour';
+      _snack('Snoozed for $label');
+    } catch (e) {
+      _snack('Snooze failed: $e');
+    }
+  }
+
+  Future<void> _snoozeTomorrow(int id) async {
+    if (!_isServiceReady) return;
+    try {
+      await _service.snoozeReminderTomorrow(id);
+      await _reload();
+      _snack('Snoozed until tomorrow');
+    } catch (e) {
+      _snack('Snooze failed: $e');
+    }
+  }
+
+  Future<void> _snoozeCustom(int id) async {
+    if (!_isServiceReady) return;
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: now,
+      lastDate: DateTime(now.year + 5),
+    );
+    if (!mounted || date == null) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(now.add(const Duration(minutes: 30))),
+    );
+    if (!mounted || time == null) return;
+    final when = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    try {
+      await _service.snoozeReminderUntil(id, when);
+      await _reload();
+      _snack('Snoozed to ${SettingsService.instance.formatDateTime(when)}');
+    } catch (e) {
+      _snack('Custom snooze failed: $e');
+    }
+  }
+
+  Future<void> _showSnoozePicker(Reminder reminder) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        final options = <({IconData icon, String label, VoidCallback onTap})>[
+          (icon: Icons.snooze_rounded, label: '5 minutes', onTap: () {
+            Navigator.of(ctx).pop();
+            _snoozeReminder(reminder.id, const Duration(minutes: 5));
+          }),
+          (icon: Icons.snooze_rounded, label: '10 minutes', onTap: () {
+            Navigator.of(ctx).pop();
+            _snoozeReminder(reminder.id, const Duration(minutes: 10));
+          }),
+          (icon: Icons.snooze_rounded, label: '30 minutes', onTap: () {
+            Navigator.of(ctx).pop();
+            _snoozeReminder(reminder.id, const Duration(minutes: 30));
+          }),
+          (icon: Icons.schedule_rounded, label: '1 hour', onTap: () {
+            Navigator.of(ctx).pop();
+            _snoozeReminder(reminder.id, const Duration(hours: 1));
+          }),
+          (icon: Icons.today_rounded, label: 'Tomorrow', onTap: () {
+            Navigator.of(ctx).pop();
+            _snoozeTomorrow(reminder.id);
+          }),
+          (icon: Icons.edit_calendar_rounded, label: 'Custom', onTap: () {
+            Navigator.of(ctx).pop();
+            _snoozeCustom(reminder.id);
+          }),
+        ];
+
+        return SafeArea(
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: options.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, i) {
+              final item = options[i];
+              return ListTile(
+                leading: Icon(item.icon),
+                title: Text(item.label),
+                onTap: item.onTap,
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
   void _snack(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -171,6 +320,8 @@ class _ReminderScreenState extends State<ReminderScreen> {
       fetchError: _fetchError,
       onRefresh: _reload,
       onCancel: _cancelReminder,
+      onComplete: _completeReminder,
+      onSnooze: _showSnoozePicker,
       onAdd: _addReminder,
       onEdit: _editReminder,
       onToggleTheme: widget.onToggleTheme,
@@ -223,13 +374,17 @@ class _ErrorScreen extends StatelessWidget {
 
 // ─── List screen ──────────────────────────────────────────────────────────────
 
-class _ListScreen extends StatelessWidget {
+enum _TaskFilter { all, pending, ongoing, completed }
+
+class _ListScreen extends StatefulWidget {
   const _ListScreen({
     required this.reminders,
     required this.isReloading,
     this.fetchError,
     required this.onRefresh,
     required this.onCancel,
+    required this.onComplete,
+    required this.onSnooze,
     required this.onAdd,
     required this.onEdit,
     required this.onToggleTheme,
@@ -242,11 +397,20 @@ class _ListScreen extends StatelessWidget {
   final String? fetchError;
   final Future<void> Function() onRefresh;
   final Future<void> Function(int) onCancel;
+  final Future<void> Function(int) onComplete;
+  final Future<void> Function(Reminder) onSnooze;
   final Future<void> Function(Reminder) onAdd;
   final Future<void> Function(Reminder) onEdit;
   final VoidCallback onToggleTheme;
   final Future<void> Function() onOpenSettings;
   final bool isDark;
+
+  @override
+  State<_ListScreen> createState() => _ListScreenState();
+}
+
+class _ListScreenState extends State<_ListScreen> {
+  _TaskFilter _filter = _TaskFilter.all;
 
   void _openAddSheet(BuildContext context) {
     showModalBottomSheet(
@@ -256,7 +420,7 @@ class _ListScreen extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (_) => _AddReminderSheet(onAdd: onAdd),
+      builder: (_) => _AddReminderSheet(onAdd: widget.onAdd),
     );
   }
 
@@ -269,7 +433,7 @@ class _ListScreen extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (_) => _AddReminderSheet(
-        onAdd: onEdit,
+        onAdd: widget.onEdit,
         initialReminder: reminder,
       ),
     );
@@ -298,91 +462,204 @@ class _ListScreen extends StatelessWidget {
     return confirmed ?? false;
   }
 
+  String _statusOf(Reminder r) {
+    if (!r.isActive) return 'completed';
+    return r.scheduledTime.isBefore(DateTime.now()) ? 'ongoing' : 'pending';
+  }
+
+  List<Reminder> _filteredReminders() {
+    final showCancelled = SettingsService.instance.showCancelledReminders;
+    final base = showCancelled
+        ? widget.reminders
+        : widget.reminders.where((r) => r.isActive).toList();
+    switch (_filter) {
+      case _TaskFilter.all:
+        return base;
+      case _TaskFilter.pending:
+        return base.where((r) => _statusOf(r) == 'pending').toList();
+      case _TaskFilter.ongoing:
+        return base.where((r) => _statusOf(r) == 'ongoing').toList();
+      case _TaskFilter.completed:
+        return base.where((r) => _statusOf(r) == 'completed').toList();
+    }
+  }
+
+  Widget _filterChip(String label, _TaskFilter value) {
+    final selected = _filter == value;
+    final cs = Theme.of(context).colorScheme;
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => setState(() => _filter = value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? cs.surface.withValues(alpha: 0.22) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: selected ? 0.98 : 0.78),
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final showCancelled = SettingsService.instance.showCancelledReminders;
-    final visibleReminders = showCancelled
-        ? reminders
-        : reminders.where((r) => r.isActive).toList();
+    final visibleReminders = _filteredReminders();
 
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLowest,
-      appBar: AppBar(
-        backgroundColor: cs.surfaceContainerLowest,
-        title: const Text('Reminders',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 24)),
-        centerTitle: false,
-        bottom: isReloading
-            ? PreferredSize(
-                preferredSize: const Size.fromHeight(3),
-                child: LinearProgressIndicator(
-                  minHeight: 3,
-                  backgroundColor: cs.surfaceContainerLowest,
-                ),
-              )
-            : null,
-        actions: [
-          IconButton(
-            icon: Icon(isDark
-                ? Icons.light_mode_rounded
-                : Icons.dark_mode_rounded),
-            tooltip: isDark ? 'Light mode' : 'Dark mode',
-            onPressed: onToggleTheme,
-          ),
-          IconButton(
-            icon: const Icon(Icons.sync_rounded),
-            tooltip: 'Refresh',
-            onPressed: isReloading ? null : onRefresh,
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_rounded),
-            tooltip: 'Settings',
-            onPressed: onOpenSettings,
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: onRefresh,
-        child: fetchError != null
-            ? _FetchErrorState(error: fetchError!, onRetry: onRefresh)
-            : visibleReminders.isEmpty
-                ? _EmptyState(onAdd: () => _openAddSheet(context))
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
-                    itemCount: visibleReminders.length,
-                    itemBuilder: (context, i) {
-                      final reminder = visibleReminders[i];
-                      return Dismissible(
-                        key: ValueKey('reminder-${reminder.id}-${reminder.isActive}'),
-                        direction: reminder.isActive
-                            ? DismissDirection.endToStart
-                            : DismissDirection.none,
-                        confirmDismiss: (_) => _confirmCancel(context, reminder),
-                        onDismissed: (_) => onCancel(reminder.id),
-                        background: Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          alignment: Alignment.centerRight,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.errorContainer,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Icon(
-                            Icons.delete_forever_rounded,
-                            color: Theme.of(context).colorScheme.error,
+      backgroundColor: const Color(0xFF1F716C),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 8, 18, 14),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: () {},
+                        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white70),
+                      ),
+                      const Expanded(
+                        child: Text(
+                          'My Remainders',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 26,
                           ),
                         ),
-                        child: _ReminderCard(
-                          reminder: reminder,
-                          onTap: reminder.isActive
-                              ? () => _openEditSheet(context, reminder)
-                              : null,
-                        ),
-                      );
-                    },
+                      ),
+                      IconButton(
+                        onPressed: widget.onOpenSettings,
+                        icon: const Icon(Icons.search_rounded, color: Colors.white70),
+                      ),
+                    ],
                   ),
+                  if (widget.isReloading)
+                    const LinearProgressIndicator(minHeight: 2, color: Colors.white70),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        _filterChip('All', _TaskFilter.all),
+                        _filterChip('Pending', _TaskFilter.pending),
+                        _filterChip('Ongoing', _TaskFilter.ongoing),
+                        _filterChip('Completed', _TaskFilter.completed),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                      child: Row(
+                        children: [
+                          Text(
+                            'All Task',
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF1F4D4B),
+                                ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            tooltip: 'Refresh',
+                            onPressed: widget.isReloading ? null : widget.onRefresh,
+                            icon: const Icon(Icons.sync_rounded),
+                          ),
+                          IconButton(
+                            tooltip: widget.isDark ? 'Light mode' : 'Dark mode',
+                            onPressed: widget.onToggleTheme,
+                            icon: Icon(widget.isDark
+                                ? Icons.light_mode_rounded
+                                : Icons.dark_mode_rounded),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: widget.onRefresh,
+                        child: widget.fetchError != null
+                            ? _FetchErrorState(error: widget.fetchError!, onRetry: widget.onRefresh)
+                            : visibleReminders.isEmpty
+                                ? _EmptyState(onAdd: () => _openAddSheet(context))
+                                : ListView.builder(
+                                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+                                    itemCount: visibleReminders.length,
+                                    itemBuilder: (context, i) {
+                                      final reminder = visibleReminders[i];
+                                      return Dismissible(
+                                        key: ValueKey('reminder-${reminder.id}-${reminder.isActive}'),
+                                        direction: reminder.isActive
+                                            ? DismissDirection.endToStart
+                                            : DismissDirection.none,
+                                        confirmDismiss: (_) => _confirmCancel(context, reminder),
+                                        onDismissed: (_) => widget.onCancel(reminder.id),
+                                        background: Container(
+                                          margin: const EdgeInsets.only(bottom: 12),
+                                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                                          alignment: Alignment.centerRight,
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context).colorScheme.errorContainer,
+                                            borderRadius: BorderRadius.circular(16),
+                                          ),
+                                          child: Icon(
+                                            Icons.delete_forever_rounded,
+                                            color: Theme.of(context).colorScheme.error,
+                                          ),
+                                        ),
+                                        child: _ReminderCard(
+                                          reminder: reminder,
+                                          onTap: reminder.isActive
+                                              ? () => _openEditSheet(context, reminder)
+                                              : null,
+                                          onComplete: reminder.isActive
+                                              ? () => widget.onComplete(reminder.id)
+                                              : null,
+                                          onSnooze: reminder.isActive
+                                              ? () => widget.onSnooze(reminder)
+                                              : null,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openAddSheet(context),
@@ -401,10 +678,14 @@ class _ReminderCard extends StatelessWidget {
   const _ReminderCard({
     required this.reminder,
     this.onTap,
+    this.onComplete,
+    this.onSnooze,
   });
 
   final Reminder reminder;
   final VoidCallback? onTap;
+  final VoidCallback? onComplete;
+  final VoidCallback? onSnooze;
 
   Color _accent(BuildContext context) {
     if (!reminder.isActive) return Colors.grey;
@@ -425,144 +706,204 @@ class _ReminderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final accent = _accent(context);
     final isDark = theme.brightness == Brightness.dark;
-    final badgeColor = reminder.isActive ? const Color(0xFF22C55E) : cs.error;
-    final badgeLabel = reminder.isActive ? 'Active' : 'Cancelled';
-    final repeatLabel = reminder.repeatFrequency == RepeatFrequency.none
-        ? 'One-time'
-        : _capitalize(reminder.repeatFrequency.name);
-    final titleInitial = reminder.title.isEmpty
-        ? 'R'
-        : reminder.title.substring(0, 1).toUpperCase();
+    final accent = _accent(context);
+    final status = !reminder.isActive
+        ? 'Completed'
+        : reminder.scheduledTime.isBefore(DateTime.now())
+            ? 'In Progress'
+            : 'Pending';
+    final statusColor = switch (status) {
+      'Completed' => const Color(0xFF19A766),
+      'In Progress' => const Color(0xFF7B61FF),
+      _ => const Color(0xFFE58D2B),
+    };
+    final progress = switch (status) {
+      'Completed' => 1.0,
+      'In Progress' => 0.75,
+      _ => 0.0,
+    };
+    final serial = 'SER${reminder.id.toString().padLeft(6, '0')}';
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Card(
-        elevation: isDark ? 0 : 1,
-        shadowColor: cs.shadow.withValues(alpha: 0.08),
-        surfaceTintColor: Colors.transparent,
-        color: isDark ? cs.surfaceContainer : cs.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Material(
+        color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: isDark ? 0.25 : 0.12),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    titleInitial,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: accent,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              reminder.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                decoration:
-                                    reminder.isActive ? null : TextDecoration.lineThrough,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: badgeColor.withValues(alpha: isDark ? 0.24 : 0.12),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              badgeLabel,
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: badgeColor,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (reminder.body.isNotEmpty)
-                        Text(
-                          reminder.body,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: cs.onSurface.withValues(alpha: 0.58),
-                          ),
-                        ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Icon(Icons.place_rounded, size: 15, color: Colors.indigo),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              _fmt(reminder.scheduledTime),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: cs.onSurface.withValues(alpha: 0.74),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: [
-                          _Chip(
-                            icon: Icons.repeat_rounded,
-                            label: repeatLabel,
-                            color: const Color(0xFF0EA5E9),
-                          ),
-                          if (reminder.isActive && onTap != null)
-                            const _Chip(
-                              icon: Icons.edit_rounded,
-                              label: 'Tap to edit',
-                              color: Colors.indigo,
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
+          child: Ink(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
                 ),
               ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(0, 12, 12, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 6),
+                    width: 4,
+                    height: 92,
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                serial,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: Colors.grey.shade600,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            _ProgressBadge(value: progress),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Icon(Icons.access_time_rounded, size: 14, color: Colors.grey.shade600),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                _fmt(reminder.scheduledTime),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          reminder.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF204646),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                reminder.body.isEmpty ? 'My Department' : reminder.body,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: isDark
+                                      ? const Color(0xFFA6CFCA)
+                                      : Colors.grey.shade700,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: statusColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: statusColor.withValues(alpha: 0.35)),
+                              ),
+                              child: Text(
+                                status.toUpperCase(),
+                                style: TextStyle(
+                                  color: statusColor,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (reminder.isActive) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              TextButton.icon(
+                                onPressed: onSnooze,
+                                icon: const Icon(Icons.snooze_rounded, size: 16),
+                                label: const Text('Snooze 10m'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: const Color(0xFF0EA5E9),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  minimumSize: const Size(0, 32),
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              TextButton.icon(
+                                onPressed: onComplete,
+                                icon: const Icon(Icons.check_circle_rounded, size: 16),
+                                label: const Text('Complete'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: const Color(0xFF19A766),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  minimumSize: const Size(0, 32),
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
+}
 
-  String _capitalize(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+class _ProgressBadge extends StatelessWidget {
+  const _ProgressBadge({required this.value});
+  final double value;
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = (value * 100).round();
+    return Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFF75E6D4), width: 2),
+      ),
+      child: Center(
+        child: Text(
+          '$pct%',
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF2D6360),
+              ),
+        ),
+      ),
+    );
+  }
 }
 
 class _Chip extends StatelessWidget {

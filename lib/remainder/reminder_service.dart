@@ -5,10 +5,26 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../config/app_config.dart';
 import 'reminder_model.dart';
+
+const String _actionComplete = 'action_complete';
+const String _actionSnooze5 = 'action_snooze_5m';
+const String _actionSnooze10 = 'action_snooze_10m';
+const String _actionSnooze30 = 'action_snooze_30m';
+const String _actionSnooze60 = 'action_snooze_60m';
+const String _actionSnoozeTomorrow = 'action_snooze_tomorrow';
+const String _actionSnoozeCustom = 'action_snooze_custom';
+const String _kPendingCustomSnoozeId = 'pending_custom_snooze_id';
+
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse response) {
+  ReminderService.instance.handleNotificationAction(response);
+}
 
 class ReminderService {
   ReminderService._();
@@ -26,6 +42,8 @@ class ReminderService {
       FlutterLocalNotificationsPlugin();
   final StreamController<Reminder> _webDueReminderController =
       StreamController<Reminder>.broadcast();
+  final StreamController<int> _customSnoozeRequestController =
+      StreamController<int>.broadcast();
 
   String _webAppUrl = '';
   bool _isInitialized = false;
@@ -33,6 +51,7 @@ class ReminderService {
   final Set<String> _webShownReminderKeys = <String>{};
 
   Stream<Reminder> get webDueReminderStream => _webDueReminderController.stream;
+  Stream<int> get customSnoozeRequestStream => _customSnoozeRequestController.stream;
 
   // ─── Public API ──────────────────────────────────────────────────────────
 
@@ -64,7 +83,11 @@ class ReminderService {
       try {
         const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
         const initSettings = InitializationSettings(android: androidInit);
-        await _notifications.initialize(initSettings);
+        await _notifications.initialize(
+          initSettings,
+          onDidReceiveNotificationResponse: handleNotificationAction,
+          onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+        );
         final androidPlugin = _notifications
             .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin
@@ -104,6 +127,70 @@ class ReminderService {
     await _scheduleNotification(active);
   }
 
+  Future<void> completeReminder(int id) async {
+    await cancelReminder(id);
+  }
+
+  Future<void> snoozeReminder(int id, {Duration by = const Duration(minutes: 10)}) async {
+    _assertInitialized();
+    final reminders = await fetchRemindersFromSheet();
+    Reminder? existing;
+    for (final r in reminders) {
+      if (r.id == id) {
+        existing = r;
+        break;
+      }
+    }
+    if (existing == null) {
+      throw StateError('Reminder not found for snooze: $id');
+    }
+    final snoozed = Reminder(
+      id: existing.id,
+      title: existing.title,
+      body: existing.body,
+      scheduledTime: DateTime.now().add(by),
+      repeatFrequency: existing.repeatFrequency,
+      isActive: true,
+    );
+    await _upsertRemote(snoozed);
+    await _scheduleNotification(snoozed);
+  }
+
+  Future<void> snoozeReminderTomorrow(int id) async {
+    _assertInitialized();
+    final source = await _findReminderById(id);
+    if (source == null) {
+      throw StateError('Reminder not found for snooze: $id');
+    }
+    final now = DateTime.now();
+    final tomorrow = DateTime(
+      now.year,
+      now.month,
+      now.day + 1,
+      source.scheduledTime.hour,
+      source.scheduledTime.minute,
+    );
+    await _applySnooze(source, tomorrow);
+  }
+
+  Future<void> snoozeReminderUntil(int id, DateTime when) async {
+    _assertInitialized();
+    final source = await _findReminderById(id);
+    if (source == null) {
+      throw StateError('Reminder not found for snooze: $id');
+    }
+    await _applySnooze(source, when);
+  }
+
+  Future<int?> consumePendingCustomSnoozeRequest() async {
+    final prefs = await SharedPreferences.getInstance();
+    final id = prefs.getInt(_kPendingCustomSnoozeId);
+    if (id != null) {
+      await prefs.remove(_kPendingCustomSnoozeId);
+    }
+    return id;
+  }
+
   Future<List<Reminder>> fetchRemindersFromSheet() async {
     _assertInitialized();
     final uri = Uri.parse(_webAppUrl)
@@ -127,6 +214,14 @@ class ReminderService {
     _assertInitialized();
     if (!kIsWeb) {
       await _notifications.cancel(id).catchError((_) {});
+    }
+    await _cancelRemoteById(id);
+  }
+
+  Future<void> _cancelRemoteById(int id) async {
+    await _ensureWebUrlLoaded();
+    if (_webAppUrl.trim().isEmpty || _webAppUrl.contains('PASTE_YOUR')) {
+      throw StateError('Web App URL is not configured.');
     }
     final uri = Uri.parse(_webAppUrl).replace(
         queryParameters: {'action': 'cancel', 'id': id.toString()});
@@ -195,6 +290,51 @@ class ReminderService {
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     if (decoded.containsKey('error')) {
       throw StateError('Upsert error from Apps Script: ${decoded['error']}');
+    }
+  }
+
+  Future<void> _upsertRemoteMap(Map<String, dynamic> data) async {
+    await _ensureWebUrlLoaded();
+    if (_webAppUrl.trim().isEmpty || _webAppUrl.contains('PASTE_YOUR')) return;
+    final json = jsonEncode(data);
+    final uri = Uri.parse(_webAppUrl)
+        .replace(queryParameters: {'action': 'upsert', 'data': json});
+    await http.get(uri).timeout(const Duration(seconds: 10));
+  }
+
+  Future<Reminder?> _findReminderById(int id) async {
+    final reminders = await fetchRemindersFromSheet();
+    for (final r in reminders) {
+      if (r.id == id) return r;
+    }
+    return null;
+  }
+
+  Future<void> _applySnooze(Reminder source, DateTime when) async {
+    final target = Reminder(
+      id: source.id,
+      title: source.title,
+      body: source.body,
+      scheduledTime: when,
+      repeatFrequency: source.repeatFrequency,
+      isActive: true,
+    );
+    await _upsertRemote(target);
+    await _scheduleNotification(target);
+  }
+
+  Future<void> _ensureWebUrlLoaded() async {
+    if (_webAppUrl.trim().isNotEmpty && !_webAppUrl.contains('PASTE_YOUR')) {
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final persisted = (prefs.getString('web_app_url') ?? '').trim();
+    if (persisted.isNotEmpty && !persisted.contains('PASTE_YOUR')) {
+      _webAppUrl = persisted;
+      return;
+    }
+    if (kWebAppUrl.trim().isNotEmpty && !kWebAppUrl.contains('PASTE_YOUR')) {
+      _webAppUrl = kWebAppUrl.trim();
     }
   }
 
@@ -280,7 +420,58 @@ class ReminderService {
         channelDescription: 'Reminder notifications',
         importance: Importance.max,
         priority: Priority.high,
+        actions: <AndroidNotificationAction>[
+          AndroidNotificationAction(
+            _actionComplete,
+            'Complete',
+            cancelNotification: true,
+            showsUserInterface: false,
+          ),
+          AndroidNotificationAction(
+            _actionSnooze5,
+            'Snooze 5m',
+            cancelNotification: true,
+            showsUserInterface: false,
+          ),
+          AndroidNotificationAction(
+            _actionSnooze10,
+            'Snooze 10m',
+            cancelNotification: true,
+            showsUserInterface: false,
+          ),
+          AndroidNotificationAction(
+            _actionSnooze30,
+            'Snooze 30m',
+            cancelNotification: true,
+            showsUserInterface: false,
+          ),
+          AndroidNotificationAction(
+            _actionSnooze60,
+            'Snooze 1h',
+            cancelNotification: true,
+            showsUserInterface: false,
+          ),
+          AndroidNotificationAction(
+            _actionSnoozeTomorrow,
+            'Tomorrow',
+            cancelNotification: true,
+            showsUserInterface: false,
+          ),
+          AndroidNotificationAction(
+            _actionSnoozeCustom,
+            'Custom',
+            cancelNotification: true,
+            showsUserInterface: true,
+          ),
+        ],
       );
+      final payload = jsonEncode({
+        'id': reminder.id,
+        'title': reminder.title,
+        'body': reminder.body,
+        'scheduledTime': reminder.scheduledTime.toIso8601String(),
+        'repeatFrequency': reminder.repeatFrequency.name,
+      });
       try {
         await _notifications.zonedSchedule(
           reminder.id,
@@ -292,7 +483,7 @@ class ReminderService {
           uiLocalNotificationDateInterpretation:
               UILocalNotificationDateInterpretation.absoluteTime,
           matchDateTimeComponents: _matchComponentsFor(reminder.repeatFrequency),
-          payload: reminder.id.toString(),
+          payload: payload,
         );
       } catch (_) {
         // Fallback for devices that deny exact alarms.
@@ -306,12 +497,129 @@ class ReminderService {
           uiLocalNotificationDateInterpretation:
               UILocalNotificationDateInterpretation.absoluteTime,
           matchDateTimeComponents: _matchComponentsFor(reminder.repeatFrequency),
-          payload: reminder.id.toString(),
+          payload: payload,
         );
       }
     } catch (_) {
       // Notifications not supported on this platform — silently skip.
     }
+  }
+
+  Future<void> handleNotificationAction(NotificationResponse response) async {
+    final actionId = response.actionId;
+    if (actionId == null || actionId.isEmpty) return;
+
+    try {
+      await _ensureWebUrlLoaded();
+      if (_webAppUrl.trim().isEmpty || _webAppUrl.contains('PASTE_YOUR')) return;
+
+      final payloadData = _decodePayload(response.payload);
+      final id = _payloadId(payloadData['id']);
+      if (id == null) return;
+
+      if (actionId == _actionComplete) {
+        await _cancelRemoteById(id);
+        await _notifications.cancel(id).catchError((_) {});
+        return;
+      }
+
+      if (actionId == _actionSnoozeCustom) {
+        await _notifications.cancel(id).catchError((_) {});
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt(_kPendingCustomSnoozeId, id);
+        if (!_customSnoozeRequestController.isClosed) {
+          _customSnoozeRequestController.add(id);
+        }
+        return;
+      }
+
+      if ({_actionSnooze5, _actionSnooze10, _actionSnooze30, _actionSnooze60, _actionSnoozeTomorrow}
+          .contains(actionId)) {
+        await _notifications.cancel(id).catchError((_) {});
+        final scheduledBase = _parseDateTime(
+          (payloadData['scheduledTime'] ?? DateTime.now().toIso8601String())
+              .toString(),
+        ) ?? DateTime.now();
+
+        final now = DateTime.now();
+        DateTime target;
+        switch (actionId) {
+          case _actionSnooze5:
+            target = now.add(const Duration(minutes: 5));
+            break;
+          case _actionSnooze10:
+            target = now.add(const Duration(minutes: 10));
+            break;
+          case _actionSnooze30:
+            target = now.add(const Duration(minutes: 30));
+            break;
+          case _actionSnooze60:
+            target = now.add(const Duration(hours: 1));
+            break;
+          case _actionSnoozeTomorrow:
+            target = DateTime(
+              now.year,
+              now.month,
+              now.day + 1,
+              scheduledBase.hour,
+              scheduledBase.minute,
+            );
+            break;
+          default:
+            return;
+        }
+
+        final updated = {
+          'id': id,
+          'title': payloadData['title'] ?? 'Reminder',
+          'body': payloadData['body'] ?? '',
+          'scheduledTime': target.toIso8601String(),
+          'repeatFrequency': payloadData['repeatFrequency'] ?? 'none',
+          'isActive': true,
+        };
+        await _upsertRemoteMap(updated);
+
+        if (!kIsWeb) {
+          final reminder = Reminder(
+            id: id,
+            title: (payloadData['title'] ?? 'Reminder').toString(),
+            body: (payloadData['body'] ?? '').toString(),
+            scheduledTime: target,
+            repeatFrequency: RepeatFrequency.values.firstWhere(
+              (v) => v.name == (payloadData['repeatFrequency'] ?? 'none').toString(),
+              orElse: () => RepeatFrequency.none,
+            ),
+            isActive: true,
+          );
+          await _scheduleNotification(reminder);
+        }
+      }
+    } catch (e) {
+      debugPrint('Notification action handling failed: $e');
+    }
+  }
+
+  Map<String, dynamic> _decodePayload(String? payload) {
+    if (payload == null || payload.trim().isEmpty) return {};
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+    } catch (_) {
+      final id = int.tryParse(payload.trim());
+      if (id != null) {
+        return {'id': id};
+      }
+    }
+    return {};
+  }
+
+  int? _payloadId(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value == null) return null;
+    return int.tryParse(value.toString());
   }
 
   void _startWebDueReminderLoop(List<Reminder> reminders) {
