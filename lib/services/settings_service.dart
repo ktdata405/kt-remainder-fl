@@ -110,23 +110,24 @@ class SettingsService extends ChangeNotifier {
 
   /// Format a [DateTime] according to the current time-format setting.
   String formatDateTime(DateTime dt) {
+    final local = dt.isUtc ? dt.toLocal() : dt;
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
-    final day   = dt.day;
-    final month = months[dt.month - 1];
-    final year  = dt.year;
+    final day   = local.day;
+    final month = months[local.month - 1];
+    final year  = local.year;
 
     if (use24hFormat) {
-      final h   = dt.hour.toString().padLeft(2, '0');
-      final min = dt.minute.toString().padLeft(2, '0');
+      final h   = local.hour.toString().padLeft(2, '0');
+      final min = local.minute.toString().padLeft(2, '0');
       return '$day $month $year · $h:$min';
     } else {
-      final rawH = dt.hour;
+      final rawH = local.hour;
       final h    = rawH > 12 ? rawH - 12 : (rawH == 0 ? 12 : rawH);
       final ampm = rawH >= 12 ? 'PM' : 'AM';
-      final min  = dt.minute.toString().padLeft(2, '0');
+      final min  = local.minute.toString().padLeft(2, '0');
       return '$day $month $year · $h:$min $ampm';
     }
   }

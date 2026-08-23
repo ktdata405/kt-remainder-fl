@@ -95,10 +95,14 @@ function fetchReminders() {
 
         if (!id || !rawTime) return null;
 
-        // Normalise date: if it's a JS Date object from Sheets, convert to ISO.
+        // Normalise date in script timezone (wall clock), not UTC.
         let scheduledTime;
         if (rawTime instanceof Date) {
-          scheduledTime = rawTime.toISOString();
+          scheduledTime = Utilities.formatDate(
+            rawTime,
+            Session.getScriptTimeZone(),
+            "yyyy-MM-dd'T'HH:mm:ss"
+          );
         } else {
           scheduledTime = String(rawTime);
         }

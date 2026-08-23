@@ -188,12 +188,15 @@ class ReminderService {
         debugPrint('Skipping reminder row — unrecognized date format "$rawTime": $row');
         return null;
       }
+      final localScheduledTime = scheduledTime.isUtc
+          ? scheduledTime.toLocal()
+          : scheduledTime;
 
       return Reminder(
         id: (id is num) ? id.toInt() : int.parse(id.toString()),
         title: title,
         body: body,
-        scheduledTime: scheduledTime,
+        scheduledTime: localScheduledTime,
         repeatFrequency: RepeatFrequency.values.firstWhere(
           (v) => v.name == (row['repeatFrequency']?.toString() ?? 'none'),
           orElse: () => RepeatFrequency.none,
