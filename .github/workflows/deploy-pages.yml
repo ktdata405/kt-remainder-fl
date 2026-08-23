@@ -31,12 +31,16 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Create app_config.dart
-        env:
-          WEB_APP_URL: ${{ secrets.WEB_APP_URL != '' && secrets.WEB_APP_URL || 'PASTE_YOUR_WEB_APP_URL_HERE' }}
+      - name: Validate committed app_config.dart
         run: |
-          mkdir -p lib/config
-          echo "const String kWebAppUrl = '$WEB_APP_URL';" > lib/config/app_config.dart
+          if [ ! -f lib/config/app_config.dart ]; then
+            echo "::error::lib/config/app_config.dart is missing. Commit this file with your Web App URL."
+            exit 1
+          fi
+          if grep -q "PASTE_YOUR" lib/config/app_config.dart; then
+            echo "::error::app_config.dart still contains placeholder URL."
+            exit 1
+          fi
 
       - name: Build web app
         shell: bash

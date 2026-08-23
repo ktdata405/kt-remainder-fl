@@ -1,7 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Copy this file to app_config.dart (git-ignored) and fill in your URL.
-// In CI set the WEB_APP_URL GitHub secret — the workflow creates this file
-// automatically from that secret value.
+// Copy this file to app_config.dart (committed) and fill in your URL.
+// CI reads the committed app_config.dart directly.
 //
 // Get the URL from:
 //   Google Sheet → Extensions → Apps Script → Deploy → New deployment → Web App

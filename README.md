@@ -6,7 +6,7 @@ A Flutter web app that schedules reminders synced to a Google Sheet via a free G
 
 | Layer | File | Purpose |
 |---|---|---|
-| Config | `lib/config/app_config.dart` | Runtime config (gitignored) |
+| Config | `lib/config/app_config.dart` | Runtime config (committed) |
 | Model | `lib/remainder/reminder_model.dart` | `Reminder` data class |
 | Service | `lib/remainder/reminder_service.dart` | HTTP ↔ Apps Script, local notifications |
 | UI | `lib/remainder/reminder_screen.dart` | List screen + add bottom sheet |
@@ -23,11 +23,11 @@ A Flutter web app that schedules reminders synced to a Google Sheet via a free G
 4. Click **Deploy → New deployment → Web app**
    - Execute as: **Me**
    - Who has access: **Anyone**
-not fee5. Click **Deploy** and copy the **Web app URL**
+5. Click **Deploy** and copy the **Web app URL**
 
 ### 2 — Add your config file
 
-Create `lib/config/app_config.dart` (gitignored):
+Edit `lib/config/app_config.dart`:
 
 ```dart
 const String kWebAppUrl = 'PASTE_YOUR_WEB_APP_URL_HERE';
@@ -39,6 +39,10 @@ const String kWebAppUrl = 'PASTE_YOUR_WEB_APP_URL_HERE';
 flutter pub get
 flutter run -d chrome
 ```
+
+### 4 — CI behavior (APK + Pages)
+
+Both workflows (`.github/workflows/build-apk.yml` and `.github/workflows/deploy-pages.yml`) read the committed `lib/config/app_config.dart` directly.
 
 ## Features
 
