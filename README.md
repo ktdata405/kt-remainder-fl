@@ -56,3 +56,13 @@ Both workflows (`.github/workflows/build-apk.yml` and `.github/workflows/deploy-
 ## Sheet columns
 
 `id` · `title` · `body` · `scheduledTime` · `repeatFrequency` · `isActive`
+
+## App icon
+
+- Base icon asset: `assets/icons/reminder_icon.png`
+- Attribution: `assets/icons/ATTRIBUTION.md`
+- Regenerate Android + Web icons:
+
+```bash
+dart run flutter_launcher_icons
+```

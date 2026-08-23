@@ -3,7 +3,7 @@
     "short_name": "Reminders",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0F0F13",
+    "background_color": "#4F46E5",
     "theme_color": "#4F46E5",
     "description": "Keep track of everything with Google Sheet sync.",
     "orientation": "portrait-primary",
