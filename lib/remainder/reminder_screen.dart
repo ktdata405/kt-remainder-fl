@@ -974,67 +974,80 @@ class _ReminderCard extends StatelessWidget {
                         ),
                         if (reminder.isActive) ...[
                           const SizedBox(height: 8),
-                          if (isBusy)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: Row(
-                                children: [
-                                  const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Updating...',
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      color: Colors.grey.shade700,
-                                      fontWeight: FontWeight.w600,
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            switchInCurve: Curves.easeOut,
+                            switchOutCurve: Curves.easeIn,
+                            child: isBusy
+                                ? Padding(
+                                    key: const ValueKey('busy-loader'),
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: Row(
+                                      children: [
+                                        const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Updating...',
+                                          style: theme.textTheme.labelSmall?.copyWith(
+                                            color: Colors.grey.shade700,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
                                     ),
+                                  )
+                                : const SizedBox(key: ValueKey('busy-loader-hidden')),
+                          ),
+                          AnimatedOpacity(
+                            duration: const Duration(milliseconds: 200),
+                            opacity: isBusy ? 0.65 : 1,
+                            child: Row(
+                              children: [
+                                TextButton.icon(
+                                  onPressed: isBusy ? null : onSnooze,
+                                  icon: const Icon(Icons.snooze_rounded, size: 18),
+                                  label: const Text('Snooze'),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: const Color(0xFF0EA5E9),
+                                    backgroundColor: const Color(0xFF0EA5E9).withValues(alpha: 0.10),
+                                    side: BorderSide(
+                                      color: const Color(0xFF0EA5E9).withValues(alpha: 0.35),
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(22),
+                                    ),
+                                    padding:
+                                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    minimumSize: const Size(0, 40),
+                                    tapTargetSize: MaterialTapTargetSize.padded,
                                   ),
-                                ],
-                              ),
+                                ),
+                                const SizedBox(width: 10),
+                                TextButton.icon(
+                                  onPressed: isBusy ? null : onComplete,
+                                  icon: const Icon(Icons.check_circle_rounded, size: 18),
+                                  label: const Text('Complete'),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: const Color(0xFF19A766),
+                                    backgroundColor: const Color(0xFF19A766).withValues(alpha: 0.10),
+                                    side: BorderSide(
+                                      color: const Color(0xFF19A766).withValues(alpha: 0.35),
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(22),
+                                    ),
+                                    padding:
+                                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    minimumSize: const Size(0, 40),
+                                    tapTargetSize: MaterialTapTargetSize.padded,
+                                  ),
+                                ),
+                              ],
                             ),
-                          Row(
-                            children: [
-                              TextButton.icon(
-                                onPressed: isBusy ? null : onSnooze,
-                                icon: const Icon(Icons.snooze_rounded, size: 16),
-                                label: const Text('Snooze'),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: const Color(0xFF0EA5E9),
-                                  backgroundColor: const Color(0xFF0EA5E9).withValues(alpha: 0.10),
-                                  side: BorderSide(
-                                    color: const Color(0xFF0EA5E9).withValues(alpha: 0.35),
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  minimumSize: const Size(0, 32),
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              TextButton.icon(
-                                onPressed: isBusy ? null : onComplete,
-                                icon: const Icon(Icons.check_circle_rounded, size: 16),
-                                label: const Text('Complete'),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: const Color(0xFF19A766),
-                                  backgroundColor: const Color(0xFF19A766).withValues(alpha: 0.10),
-                                  side: BorderSide(
-                                    color: const Color(0xFF19A766).withValues(alpha: 0.35),
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  minimumSize: const Size(0, 32),
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                ),
-                              ),
-                            ],
                           ),
                         ],
                       ],
