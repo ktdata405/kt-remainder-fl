@@ -48,19 +48,21 @@ class ReminderService {
     _webAppUrl = webAppUrl.trim();
     tz.initializeTimeZones();
 
-    // Local notifications — best-effort (not supported on web).
-    try {
-      const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-      const initSettings = InitializationSettings(android: androidInit);
-      await _notifications.initialize(initSettings);
-      final androidPlugin = _notifications
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
-      await androidPlugin?.requestNotificationsPermission();
-      await androidPlugin?.createNotificationChannel(_channel);
-    } catch (_) {
-      // Notifications not available on this platform (e.g. web) — continue.
+    // Local notifications — Android only (not supported on web).
+    if (!kIsWeb) {
+      try {
+        const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+        const initSettings = InitializationSettings(android: androidInit);
+        await _notifications.initialize(initSettings);
+        final androidPlugin = _notifications
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+        await androidPlugin?.requestNotificationsPermission();
+        await androidPlugin?.createNotificationChannel(_channel);
+      } catch (_) {
+        // Notifications not available on this platform — continue.
+      }
     }
 
     _isInitialized = true;
@@ -111,7 +113,9 @@ class ReminderService {
 
   Future<void> cancelReminder(int id) async {
     _assertInitialized();
-    await _notifications.cancel(id).catchError((_) {});
+    if (!kIsWeb) {
+      await _notifications.cancel(id).catchError((_) {});
+    }
     final uri = Uri.parse(_webAppUrl).replace(
         queryParameters: {'action': 'cancel', 'id': id.toString()});
     final response = await http.get(uri);
@@ -127,7 +131,9 @@ class ReminderService {
 
   Future<void> rescheduleActiveRemindersFromSheet() async {
     _assertInitialized();
-    await _notifications.cancelAll().catchError((_) {});
+    if (!kIsWeb) {
+      await _notifications.cancelAll().catchError((_) {});
+    }
     final reminders = await fetchRemindersFromSheet();
     for (final reminder in reminders.where((r) => r.isActive)) {
       await _scheduleNotification(reminder);
@@ -232,6 +238,7 @@ class ReminderService {
   }
 
   Future<void> _scheduleNotification(Reminder reminder) async {
+    if (kIsWeb) return; // Local notifications are not supported on web.
     if (!reminder.isActive) return;
     final nextTime = _nextScheduleTime(reminder);
     if (nextTime == null) return;

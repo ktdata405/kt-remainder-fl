@@ -1,0 +1,283 @@
+name: Build Flutter Android APK
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        id: setup_java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Export Java for all steps
+        run: |
+          echo "JAVA_HOME=${{ steps.setup_java.outputs.path }}" >> "$GITHUB_ENV"
+          echo "${{ steps.setup_java.outputs.path }}/bin" >> "$GITHUB_PATH"
+          java -version
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.29.2"
+          channel: stable
+          cache: true
+
+      - name: Configure Flutter JDK
+        env:
+          JAVA_HOME: ${{ steps.setup_java.outputs.path }}
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME"
+          java -version
+          flutter config --jdk-dir="$JAVA_HOME"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager \
+            "platform-tools" \
+            "cmdline-tools;latest" \
+            "ndk;27.0.12077973" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Flutter diagnostics
+        run: |
+          flutter --version
+          flutter doctor -v
+
+      - name: Create local.properties
+        run: |
+          FLUTTER_SDK=$(dirname $(dirname $(which flutter)))
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+          echo "flutter.sdk=$FLUTTER_SDK" >> android/local.properties
+          cat android/local.properties
+
+      - name: Create app_config.dart
+        env:
+          WEB_APP_URL: ${{ secrets.WEB_APP_URL != '' && secrets.WEB_APP_URL || 'PASTE_YOUR_WEB_APP_URL_HERE' }}
+        run: |
+          mkdir -p lib/config
+          echo "const String kWebAppUrl = '$WEB_APP_URL';" > lib/config/app_config.dart
+          echo "app_config.dart created (URL length: ${#WEB_APP_URL} chars)"
+
+      - name: Ensure Gradle wrapper is executable
+        run: chmod +x android/gradlew
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build debug APK
+        run: |
+          set -o pipefail
+          java -version
+          if ! flutter build apk --debug --verbose 2>&1 | tee build-debug.log; then
+            echo "::group::First FAILURE block (debug)"
+            awk '/FAILURE: Build failed with an exception\./,0' build-debug.log > build-debug-failure.log || true
+            if [ -s build-debug-failure.log ]; then
+              head -n 200 build-debug-failure.log
+            else
+              tail -n 200 build-debug.log
+            fi
+            echo "::endgroup::"
+            exit 1
+          fi
+
+      - name: Build release APK
+        run: |
+          set -o pipefail
+          java -version
+          if ! flutter build apk --release --verbose 2>&1 | tee build-release.log; then
+            echo "::group::First FAILURE block (release)"
+            awk '/FAILURE: Build failed with an exception\./,0' build-release.log > build-release-failure.log || true
+            if [ -s build-release-failure.log ]; then
+              head -n 200 build-release-failure.log
+            else
+              tail -n 200 build-release.log
+            fi
+            echo "::endgroup::"
+            exit 1
+          fi
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build-debug.log
+            build-debug-failure.log
+            build-release.log
+            build-release-failure.log
+          if-no-files-found: ignore
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+      - name: Decide email attachment mode
+        id: mail_attachment_mode
+        env:
+          MAIL_MAX_ATTACHMENT_BYTES: ${{ vars.MAIL_MAX_ATTACHMENT_BYTES != '' && vars.MAIL_MAX_ATTACHMENT_BYTES || '18000000' }}
+        run: |
+          DEBUG_APK="build/app/outputs/flutter-apk/app-debug.apk"
+          RELEASE_APK="build/app/outputs/flutter-apk/app-release.apk"
+
+          if [ ! -f "$DEBUG_APK" ] || [ ! -f "$RELEASE_APK" ]; then
+            echo "attach_apks=false" >> "$GITHUB_OUTPUT"
+            echo "reason=apk files not found for attachment" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          DEBUG_SIZE=$(wc -c < "$DEBUG_APK")
+          RELEASE_SIZE=$(wc -c < "$RELEASE_APK")
+          TOTAL_SIZE=$((DEBUG_SIZE + RELEASE_SIZE))
+
+          echo "total_size=$TOTAL_SIZE" >> "$GITHUB_OUTPUT"
+
+          if [ "$TOTAL_SIZE" -le "$MAIL_MAX_ATTACHMENT_BYTES" ]; then
+            echo "attach_apks=true" >> "$GITHUB_OUTPUT"
+            echo "reason=apk size within attachment limit" >> "$GITHUB_OUTPUT"
+          else
+            echo "attach_apks=false" >> "$GITHUB_OUTPUT"
+            echo "reason=apk size exceeds attachment limit" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Detect mail secret configuration
+        id: mail_config
+        env:
+          MAIL_ENABLED: ${{ vars.MAIL_ENABLED }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME != '' && secrets.MAIL_USERNAME || secrets.MAIL_KTDATA405 }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_APP_PASSWORD != '' && secrets.MAIL_APP_PASSWORD || secrets.MAIL_PASSWORD }}
+          SMTP_SERVER: ${{ vars.SMTP_SERVER != '' && vars.SMTP_SERVER || 'smtp.gmail.com' }}
+          SMTP_PORT: ${{ vars.SMTP_PORT != '' && vars.SMTP_PORT || '465' }}
+          SMTP_SECURE: ${{ vars.SMTP_SECURE != '' && vars.SMTP_SECURE || 'true' }}
+          MAIL_TO: ${{ vars.MAIL_TO != '' && vars.MAIL_TO || 'ktdata405@gmail.com' }}
+        run: |
+          MAIL_ENABLED_NORMALIZED=$(echo "${MAIL_ENABLED:-}" | tr '[:upper:]' '[:lower:]')
+          if [ "$MAIL_ENABLED_NORMALIZED" = "false" ] || [ "$MAIL_ENABLED_NORMALIZED" = "0" ] || [ "$MAIL_ENABLED_NORMALIZED" = "no" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "reason=MAIL_ENABLED explicitly disabled" >> "$GITHUB_OUTPUT"
+          elif [ -z "$MAIL_USERNAME" ] || [ -z "$MAIL_PASSWORD" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "reason=missing MAIL_USERNAME/MAIL_PASSWORD secrets" >> "$GITHUB_OUTPUT"
+          elif [ -z "$SMTP_SERVER" ] || [ -z "$SMTP_PORT" ] || [ -z "$MAIL_TO" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "reason=missing SMTP_SERVER/SMTP_PORT/MAIL_TO variables" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "reason=mail configuration detected" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mail notification status
+        run: |
+          echo "::notice::Mail enabled=${{ steps.mail_config.outputs.enabled }} (${{ steps.mail_config.outputs.reason }})"
+          echo "::notice::Attach APKs=${{ steps.mail_attachment_mode.outputs.attach_apks }} (${{ steps.mail_attachment_mode.outputs.reason }})"
+
+      - name: Warn when email notification is skipped
+        if: steps.mail_config.outputs.enabled != 'true'
+        run: |
+          echo "::warning::Email not sent: ${{ steps.mail_config.outputs.reason }}"
+
+      - name: Email APK build with attachments
+        id: email_apk_attachments
+        if: success() && steps.mail_config.outputs.enabled == 'true' && steps.mail_attachment_mode.outputs.attach_apks == 'true'
+        continue-on-error: true
+        uses: dawidd6/action-send-mail@v3
+        env:
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME != '' && secrets.MAIL_USERNAME || secrets.MAIL_KTDATA405 }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_APP_PASSWORD != '' && secrets.MAIL_APP_PASSWORD || secrets.MAIL_PASSWORD }}
+          SMTP_SERVER: ${{ vars.SMTP_SERVER != '' && vars.SMTP_SERVER || 'smtp.gmail.com' }}
+          SMTP_PORT: ${{ vars.SMTP_PORT != '' && vars.SMTP_PORT || '465' }}
+          SMTP_SECURE: ${{ vars.SMTP_SECURE != '' && vars.SMTP_SECURE || 'true' }}
+          MAIL_TO: ${{ vars.MAIL_TO != '' && vars.MAIL_TO || 'ktdata405@gmail.com' }}
+        with:
+          server_address: ${{ env.SMTP_SERVER }}
+          server_port: ${{ env.SMTP_PORT }}
+          secure: ${{ env.SMTP_SECURE }}
+          username: ${{ env.MAIL_USERNAME }}
+          password: ${{ env.MAIL_PASSWORD }}
+          subject: "KT Reminders APK build ready (#${{ github.run_number }}) - with attachments"
+          to: ${{ env.MAIL_TO }}
+          from: ${{ env.MAIL_USERNAME }}
+          attachments: |
+            build/app/outputs/flutter-apk/app-debug.apk
+            build/app/outputs/flutter-apk/app-release.apk
+          html_body: |
+            <h3>APK build completed successfully</h3>
+            <p><b>Delivery mode:</b> APK files attached to this email.</p>
+            <p><b>Repository:</b> ${{ github.repository }}</p>
+            <p><b>Branch:</b> ${{ github.ref_name }}</p>
+            <p><b>Run:</b> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Open workflow run</a></p>
+            <p>Download artifacts from this run:</p>
+            <ul>
+              <li><code>app-debug-apk</code></li>
+              <li><code>app-release-apk</code></li>
+            </ul>
+
+      - name: Email APK build links
+        id: email_apk_links
+        if: success() && steps.mail_config.outputs.enabled == 'true' && steps.mail_attachment_mode.outputs.attach_apks != 'true'
+        continue-on-error: true
+        uses: dawidd6/action-send-mail@v3
+        env:
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME != '' && secrets.MAIL_USERNAME || secrets.MAIL_KTDATA405 }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_APP_PASSWORD != '' && secrets.MAIL_APP_PASSWORD || secrets.MAIL_PASSWORD }}
+          SMTP_SERVER: ${{ vars.SMTP_SERVER != '' && vars.SMTP_SERVER || 'smtp.gmail.com' }}
+          SMTP_PORT: ${{ vars.SMTP_PORT != '' && vars.SMTP_PORT || '465' }}
+          SMTP_SECURE: ${{ vars.SMTP_SECURE != '' && vars.SMTP_SECURE || 'true' }}
+          MAIL_TO: ${{ vars.MAIL_TO != '' && vars.MAIL_TO || 'ktdata405@gmail.com' }}
+        with:
+          server_address: ${{ env.SMTP_SERVER }}
+          server_port: ${{ env.SMTP_PORT }}
+          secure: ${{ env.SMTP_SECURE }}
+          username: ${{ env.MAIL_USERNAME }}
+          password: ${{ env.MAIL_PASSWORD }}
+          subject: "KT Reminders APK build ready (#${{ github.run_number }})"
+          to: ${{ env.MAIL_TO }}
+          from: ${{ env.MAIL_USERNAME }}
+          html_body: |
+            <h3>APK build completed successfully</h3>
+            <p><b>Delivery mode:</b> links only (${{ steps.mail_attachment_mode.outputs.reason }}).</p>
+            <p><b>Repository:</b> ${{ github.repository }}</p>
+            <p><b>Branch:</b> ${{ github.ref_name }}</p>
+            <p><b>Run:</b> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Open workflow run</a></p>
+            <p>Download artifacts from this run:</p>
+            <ul>
+              <li><code>app-debug-apk</code></li>
+              <li><code>app-release-apk</code></li>
+            </ul>
+
+      - name: Warn when email notification fails
+        if: steps.mail_config.outputs.enabled == 'true' && (steps.email_apk_attachments.outcome == 'failure' || steps.email_apk_links.outcome == 'failure')
+        run: |
+          echo "::warning::SMTP login failed while sending mail. APK artifacts are still available in this workflow run."
+
+

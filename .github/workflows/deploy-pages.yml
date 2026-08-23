@@ -1,0 +1,79 @@
+name: Deploy Flutter web to GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.29.2"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Create app_config.dart
+        env:
+          WEB_APP_URL: ${{ secrets.WEB_APP_URL != '' && secrets.WEB_APP_URL || 'PASTE_YOUR_WEB_APP_URL_HERE' }}
+        run: |
+          mkdir -p lib/config
+          echo "const String kWebAppUrl = '$WEB_APP_URL';" > lib/config/app_config.dart
+
+      - name: Build web app
+        shell: bash
+        run: |
+          repo="${GITHUB_REPOSITORY#*/}"
+          owner="${GITHUB_REPOSITORY%%/*}"
+
+          # Use root base path for user/organization pages, repo subpath for project pages.
+          if [ "$repo" = "$owner.github.io" ]; then
+            base_href="/"
+          else
+            base_href="/$repo/"
+          fi
+
+          echo "Using base href: $base_href"
+          flutter build web --release --base-href "$base_href"
+
+      - name: SPA fallback for GitHub Pages
+        run: cp build/web/index.html build/web/404.html
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+
