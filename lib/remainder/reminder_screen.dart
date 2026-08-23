@@ -410,7 +410,7 @@ class _ListScreen extends StatefulWidget {
 }
 
 class _ListScreenState extends State<_ListScreen> {
-  _TaskFilter _filter = _TaskFilter.all;
+  _TaskFilter _filter = _TaskFilter.pending;
 
   void _openAddSheet(BuildContext context) {
     showModalBottomSheet(
@@ -544,7 +544,7 @@ class _ListScreenState extends State<_ListScreen> {
                       ),
                       IconButton(
                         onPressed: widget.onOpenSettings,
-                        icon: const Icon(Icons.search_rounded, color: Colors.white70),
+                        icon: const Icon(Icons.settings_rounded, color: Colors.white),
                       ),
                     ],
                   ),
@@ -559,8 +559,8 @@ class _ListScreenState extends State<_ListScreen> {
                     ),
                     child: Row(
                       children: [
-                        _filterChip('All', _TaskFilter.all),
                         _filterChip('Pending', _TaskFilter.pending),
+                        _filterChip('All', _TaskFilter.all),
                         _filterChip('Ongoing', _TaskFilter.ongoing),
                         _filterChip('Completed', _TaskFilter.completed),
                       ],
@@ -661,11 +661,10 @@ class _ListScreenState extends State<_ListScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: () => _openAddSheet(context),
-        icon: const Icon(Icons.add_alarm_rounded),
-        label: const Text('Add Reminder',
-            style: TextStyle(fontWeight: FontWeight.w600)),
+        tooltip: 'Add Reminder',
+        child: const Icon(Icons.add_rounded),
         elevation: 4,
       ),
     );
