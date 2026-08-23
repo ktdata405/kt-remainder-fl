@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_local_notifications: ^17.0.0   # Android only; gracefully skipped on web
+  flutter_timezone: ^4.1.1
   timezone: ^0.9.0
   http: ^1.2.0
   shared_preferences: ^2.3.0

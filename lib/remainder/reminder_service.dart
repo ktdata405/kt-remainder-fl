@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:http/http.dart' as http;
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -22,9 +24,15 @@ class ReminderService {
 
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
+  final StreamController<Reminder> _webDueReminderController =
+      StreamController<Reminder>.broadcast();
 
   String _webAppUrl = '';
   bool _isInitialized = false;
+  Timer? _webReminderTimer;
+  final Set<String> _webShownReminderKeys = <String>{};
+
+  Stream<Reminder> get webDueReminderStream => _webDueReminderController.stream;
 
   // ─── Public API ──────────────────────────────────────────────────────────
 
@@ -33,6 +41,9 @@ class ReminderService {
   void reset() {
     _isInitialized = false;
     _webAppUrl = '';
+    _webReminderTimer?.cancel();
+    _webReminderTimer = null;
+    _webShownReminderKeys.clear();
   }
 
   Future<void> initialize({required String webAppUrl}) async {
@@ -46,7 +57,7 @@ class ReminderService {
     }
 
     _webAppUrl = webAppUrl.trim();
-    tz.initializeTimeZones();
+    await _configureLocalTimezone();
 
     // Local notifications — Android only (not supported on web).
     if (!kIsWeb) {
@@ -59,6 +70,7 @@ class ReminderService {
               AndroidFlutterLocalNotificationsPlugin
             >();
         await androidPlugin?.requestNotificationsPermission();
+        await androidPlugin?.requestExactAlarmsPermission();
         await androidPlugin?.createNotificationChannel(_channel);
       } catch (_) {
         // Notifications not available on this platform — continue.
@@ -135,10 +147,25 @@ class ReminderService {
       await _notifications.cancelAll().catchError((_) {});
     }
     final reminders = await fetchRemindersFromSheet();
+    if (kIsWeb) {
+      _startWebDueReminderLoop(reminders);
+    }
     for (final reminder in reminders.where((r) => r.isActive)) {
       await _scheduleNotification(reminder);
     }
   }
+  Future<void> _configureLocalTimezone() async {
+    tz.initializeTimeZones();
+    if (kIsWeb) return;
+    try {
+      final timezoneName = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(timezoneName));
+    } catch (e) {
+      debugPrint('Could not set local timezone. Falling back to UTC: $e');
+      tz.setLocalLocation(tz.getLocation('UTC'));
+    }
+  }
+
 
   // ─── Private helpers ──────────────────────────────────────────────────────
 
@@ -241,7 +268,7 @@ class ReminderService {
   }
 
   Future<void> _scheduleNotification(Reminder reminder) async {
-    if (kIsWeb) return; // Local notifications are not supported on web.
+    if (kIsWeb) return; // Web uses foreground due-reminder loop instead.
     if (!reminder.isActive) return;
     final nextTime = _nextScheduleTime(reminder);
     if (nextTime == null) return;
@@ -254,21 +281,81 @@ class ReminderService {
         importance: Importance.max,
         priority: Priority.high,
       );
-      await _notifications.zonedSchedule(
-        reminder.id,
-        reminder.title,
-        reminder.body,
-        tzDateTime,
-        const NotificationDetails(android: androidDetails),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: _matchComponentsFor(reminder.repeatFrequency),
-        payload: reminder.id.toString(),
-      );
+      try {
+        await _notifications.zonedSchedule(
+          reminder.id,
+          reminder.title,
+          reminder.body,
+          tzDateTime,
+          const NotificationDetails(android: androidDetails),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          matchDateTimeComponents: _matchComponentsFor(reminder.repeatFrequency),
+          payload: reminder.id.toString(),
+        );
+      } catch (_) {
+        // Fallback for devices that deny exact alarms.
+        await _notifications.zonedSchedule(
+          reminder.id,
+          reminder.title,
+          reminder.body,
+          tzDateTime,
+          const NotificationDetails(android: androidDetails),
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          matchDateTimeComponents: _matchComponentsFor(reminder.repeatFrequency),
+          payload: reminder.id.toString(),
+        );
+      }
     } catch (_) {
       // Notifications not supported on this platform — silently skip.
     }
+  }
+
+  void _startWebDueReminderLoop(List<Reminder> reminders) {
+    _webReminderTimer?.cancel();
+    _webShownReminderKeys.clear();
+    _webReminderTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      final now = DateTime.now();
+      for (final reminder in reminders.where((r) => r.isActive)) {
+        if (_isWebDueNow(reminder, now)) {
+          final key = _webOccurrenceKey(reminder, now);
+          if (_webShownReminderKeys.contains(key)) continue;
+          _webShownReminderKeys.add(key);
+          if (!_webDueReminderController.isClosed) {
+            _webDueReminderController.add(reminder);
+          }
+        }
+      }
+    });
+  }
+
+  bool _isWebDueNow(Reminder reminder, DateTime now) {
+    final scheduled = reminder.scheduledTime;
+    switch (reminder.repeatFrequency) {
+      case RepeatFrequency.none:
+        final diff = now.difference(scheduled);
+        return !diff.isNegative && diff <= const Duration(seconds: 59);
+      case RepeatFrequency.daily:
+        return now.hour == scheduled.hour && now.minute == scheduled.minute;
+      case RepeatFrequency.weekly:
+        return now.weekday == scheduled.weekday &&
+            now.hour == scheduled.hour &&
+            now.minute == scheduled.minute;
+      case RepeatFrequency.monthly:
+        return now.day == scheduled.day &&
+            now.hour == scheduled.hour &&
+            now.minute == scheduled.minute;
+    }
+  }
+
+  String _webOccurrenceKey(Reminder reminder, DateTime now) {
+    final y = now.year.toString().padLeft(4, '0');
+    final m = now.month.toString().padLeft(2, '0');
+    final d = now.day.toString().padLeft(2, '0');
+    return '${reminder.id}-$y$m$d';
   }
 
   DateTime? _nextScheduleTime(Reminder reminder) {
