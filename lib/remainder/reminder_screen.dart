@@ -575,7 +575,7 @@ class _ListScreenState extends State<_ListScreen> {
 
   String _statusOf(Reminder r) {
     if (!r.isActive) return 'completed';
-    return r.scheduledTime.isBefore(DateTime.now()) ? 'ongoing' : 'pending';
+    return r.scheduledTime.isBefore(DateTime.now()) ? 'overdue' : 'pending';
   }
 
   List<Reminder> _filteredReminders() {
@@ -589,7 +589,7 @@ class _ListScreenState extends State<_ListScreen> {
       case _TaskFilter.pending:
         return base.where((r) => _statusOf(r) == 'pending').toList();
       case _TaskFilter.ongoing:
-        return base.where((r) => _statusOf(r) == 'ongoing').toList();
+        return base.where((r) => _statusOf(r) == 'overdue').toList();
       case _TaskFilter.completed:
         return base.where((r) => _statusOf(r) == 'completed').toList();
     }
@@ -670,7 +670,7 @@ class _ListScreenState extends State<_ListScreen> {
                       children: [
                         _filterChip('Pending', _TaskFilter.pending),
                         _filterChip('All', _TaskFilter.all),
-                        _filterChip('Ongoing', _TaskFilter.ongoing),
+                        _filterChip('Overdue', _TaskFilter.ongoing),
                         _filterChip('Completed', _TaskFilter.completed),
                       ],
                     ),
@@ -732,7 +732,7 @@ class _ListScreenState extends State<_ListScreen> {
                                     itemCount: visibleReminders.length,
                                     separatorBuilder: (_, __) => const Padding(
                                       padding: EdgeInsets.symmetric(horizontal: 12),
-                                      child: Divider(height: 4, thickness: 0.8),
+                                      child: Divider(height: 1, thickness: 0.5),
                                     ),
                                     itemBuilder: (context, i) {
                                       final reminder = visibleReminders[i];
@@ -833,112 +833,132 @@ class _ReminderCard extends StatelessWidget {
     final status = !reminder.isActive
         ? 'Completed'
         : reminder.scheduledTime.isBefore(DateTime.now())
-            ? 'In Progress'
+            ? 'Overdue'
             : 'Pending';
     final statusColor = switch (status) {
       'Completed' => const Color(0xFF19A766),
-      'In Progress' => const Color(0xFF7B61FF),
+      'Overdue' => const Color(0xFFE53935),
       _ => const Color(0xFFE58D2B),
     };
     final progress = switch (status) {
       'Completed' => 1.0,
-      'In Progress' => 0.75,
+      'Overdue' => 0.75,
       _ => 0.0,
     };
-    final serial = 'SER${reminder.id.toString().padLeft(6, '0')}';
+    final isOverdue = reminder.isActive && reminder.scheduledTime.isBefore(DateTime.now());
+    final timeColor = isOverdue ? const Color(0xFFE53935) : const Color(0xFF0F766E);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(14),
           onTap: onTap,
           child: Ink(
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(0, 12, 12, 12),
+              padding: const EdgeInsets.fromLTRB(0, 8, 10, 8),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  // Left accent bar
                   Container(
-                    margin: const EdgeInsets.only(top: 6),
                     width: 4,
-                    height: 92,
+                    height: 56,
                     decoration: BoxDecoration(
                       color: accent,
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
+                  // Main content
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
+                        // Row 1: time chip + status badge
                         Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: timeColor.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: timeColor.withValues(alpha: 0.30)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isOverdue ? Icons.warning_amber_rounded : Icons.access_time_rounded,
+                                    size: 11,
+                                    color: timeColor,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _fmt(reminder.scheduledTime),
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: timeColor,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: statusColor.withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: statusColor.withValues(alpha: 0.30)),
+                              ),
+                              child: Text(
+                                status.toUpperCase(),
+                                style: TextStyle(
+                                  color: statusColor,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        // Row 2: title + progress badge
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Expanded(
                               child: Text(
-                                serial,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: Colors.grey.shade600,
-                                  fontWeight: FontWeight.w600,
+                                reminder.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF204646),
                                 ),
                               ),
                             ),
+                            const SizedBox(width: 8),
                             _ProgressBadge(value: progress),
                           ],
                         ),
-                        const SizedBox(height: 2),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0F766E).withValues(alpha: 0.10),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: const Color(0xFF0F766E).withValues(alpha: 0.30),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.access_time_rounded,
-                                    size: 14, color: Color(0xFF0F766E)),
-                                const SizedBox(width: 6),
-                                Text(
-                                  _fmt(reminder.scheduledTime),
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: const Color(0xFF0F766E),
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          reminder.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF204646),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 3),
+                        // Row 3: body + action buttons
                         Row(
                           children: [
                             Expanded(
@@ -947,109 +967,42 @@ class _ReminderCard extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  color: isDark
-                                      ? const Color(0xFFA6CFCA)
-                                      : Colors.grey.shade700,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: statusColor.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: statusColor.withValues(alpha: 0.35)),
-                              ),
-                              child: Text(
-                                status.toUpperCase(),
-                                style: TextStyle(
-                                  color: statusColor,
-                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? const Color(0xFFA6CFCA) : Colors.grey.shade600,
+                                  fontWeight: FontWeight.w400,
                                   fontSize: 11,
                                 ),
                               ),
                             ),
+                            if (reminder.isActive) ...[
+                              const SizedBox(width: 6),
+                              AnimatedOpacity(
+                                duration: const Duration(milliseconds: 200),
+                                opacity: isBusy ? 0.5 : 1,
+                                child: isBusy
+                                    ? const SizedBox(
+                                        width: 14, height: 14,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      )
+                                    : Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          _CompactActionButton(
+                                            icon: Icons.snooze_rounded,
+                                            color: const Color(0xFF0EA5E9),
+                                            onTap: onSnooze,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          _CompactActionButton(
+                                            icon: Icons.check_circle_rounded,
+                                            color: const Color(0xFF19A766),
+                                            onTap: onComplete,
+                                          ),
+                                        ],
+                                      ),
+                              ),
+                            ],
                           ],
                         ),
-                        if (reminder.isActive) ...[
-                          const SizedBox(height: 8),
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 220),
-                            switchInCurve: Curves.easeOut,
-                            switchOutCurve: Curves.easeIn,
-                            child: isBusy
-                                ? Padding(
-                                    key: const ValueKey('busy-loader'),
-                                    padding: const EdgeInsets.only(bottom: 6),
-                                    child: Row(
-                                      children: [
-                                        const SizedBox(
-                                          width: 14,
-                                          height: 14,
-                                          child: CircularProgressIndicator(strokeWidth: 2),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          'Updating...',
-                                          style: theme.textTheme.labelSmall?.copyWith(
-                                            color: Colors.grey.shade700,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                : const SizedBox(key: ValueKey('busy-loader-hidden')),
-                          ),
-                          AnimatedOpacity(
-                            duration: const Duration(milliseconds: 200),
-                            opacity: isBusy ? 0.65 : 1,
-                            child: Row(
-                              children: [
-                                TextButton.icon(
-                                  onPressed: isBusy ? null : onSnooze,
-                                  icon: const Icon(Icons.snooze_rounded, size: 18),
-                                  label: const Text('Snooze'),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: const Color(0xFF0EA5E9),
-                                    backgroundColor: const Color(0xFF0EA5E9).withValues(alpha: 0.10),
-                                    side: BorderSide(
-                                      color: const Color(0xFF0EA5E9).withValues(alpha: 0.35),
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(22),
-                                    ),
-                                    padding:
-                                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    minimumSize: const Size(0, 40),
-                                    tapTargetSize: MaterialTapTargetSize.padded,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                TextButton.icon(
-                                  onPressed: isBusy ? null : onComplete,
-                                  icon: const Icon(Icons.check_circle_rounded, size: 18),
-                                  label: const Text('Complete'),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: const Color(0xFF19A766),
-                                    backgroundColor: const Color(0xFF19A766).withValues(alpha: 0.10),
-                                    side: BorderSide(
-                                      color: const Color(0xFF19A766).withValues(alpha: 0.35),
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(22),
-                                    ),
-                                    padding:
-                                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    minimumSize: const Size(0, 40),
-                                    tapTargetSize: MaterialTapTargetSize.padded,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ),
@@ -1071,20 +1024,45 @@ class _ProgressBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final pct = (value * 100).round();
     return Container(
-      width: 46,
-      height: 46,
+      width: 34,
+      height: 34,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFF75E6D4), width: 2),
+        border: Border.all(color: const Color(0xFF75E6D4), width: 1.5),
       ),
       child: Center(
         child: Text(
           '$pct%',
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 fontWeight: FontWeight.w700,
+                fontSize: 10,
                 color: const Color(0xFF2D6360),
               ),
         ),
+      ),
+    );
+  }
+}
+
+class _CompactActionButton extends StatelessWidget {
+  const _CompactActionButton({required this.icon, required this.color, this.onTap});
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withValues(alpha: 0.30)),
+        ),
+        child: Icon(icon, size: 16, color: color),
       ),
     );
   }
