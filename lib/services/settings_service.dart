@@ -4,26 +4,31 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../remainder/reminder_model.dart';
 
 /// Persists all app settings using SharedPreferences.
-/// Call [init] once at startup before reading any values.
 class SettingsService extends ChangeNotifier {
   SettingsService._();
   static final SettingsService instance = SettingsService._();
 
-  // ─── Storage keys ──────────────────────────────────────────────────────────
   static const _kWebAppUrl         = 'web_app_url';
-  static const _kThemeMode         = 'theme_mode';      // 'system'|'light'|'dark'
-  static const _kDefaultRepeat     = 'default_repeat';  // RepeatFrequency.name
+  static const _kThemeMode         = 'theme_mode';
+  static const _kDefaultRepeat     = 'default_repeat';
   static const _kUse24h            = 'use_24h';
   static const _kShowCancelled     = 'show_cancelled';
-  static const _kDefaultLeadMin    = 'default_lead_min'; // advance-alert minutes
+  static const _kDefaultLeadMin    = 'default_lead_min';
+  
+  // Font settings
+  static const _kFontSizeTitle     = 'font_size_title';
+  static const _kFontSizeBody      = 'font_size_body';
+  static const _kFontSizeLabel     = 'font_size_label';
+  static const _kFontColorTitle    = 'font_color_title';
+  static const _kFontColorGlobal   = 'font_color';
+  static const _kFontStyleTitle    = 'font_style_title';
+  static const _kFontStyleBody     = 'font_style_body';
+  static const _kFontStyleLabel    = 'font_style_label';
 
   SharedPreferences? _prefs;
 
-  // ─── Lifecycle ─────────────────────────────────────────────────────────────
-
   Future<void> init({String seedUrl = ''}) async {
     _prefs = await SharedPreferences.getInstance();
-    // Seed the URL from app_config.dart on first launch if not yet saved.
     if (seedUrl.isNotEmpty &&
         !seedUrl.contains('PASTE_YOUR') &&
         (_prefs!.getString(_kWebAppUrl) ?? '').isEmpty) {
@@ -31,21 +36,13 @@ class SettingsService extends ChangeNotifier {
     }
   }
 
-  // ─── Web App URL ───────────────────────────────────────────────────────────
-
   String get webAppUrl => _prefs?.getString(_kWebAppUrl) ?? '';
-
   Future<void> setWebAppUrl(String url) async {
     await _prefs!.setString(_kWebAppUrl, url.trim());
     notifyListeners();
   }
 
-  bool get isConfigured {
-    final url = webAppUrl;
-    return url.isNotEmpty && !url.contains('PASTE_YOUR');
-  }
-
-  // ─── Theme ─────────────────────────────────────────────────────────────────
+  bool get isConfigured => webAppUrl.isNotEmpty && !webAppUrl.contains('PASTE_YOUR');
 
   ThemeMode get themeMode {
     switch (_prefs?.getString(_kThemeMode) ?? 'system') {
@@ -54,82 +51,105 @@ class SettingsService extends ChangeNotifier {
       default:       return ThemeMode.system;
     }
   }
-
   Future<void> setThemeMode(ThemeMode mode) async {
-    final val = mode == ThemeMode.light ? 'light'
-              : mode == ThemeMode.dark  ? 'dark'
-              : 'system';
+    final val = mode == ThemeMode.light ? 'light' : mode == ThemeMode.dark ? 'dark' : 'system';
     await _prefs!.setString(_kThemeMode, val);
     notifyListeners();
   }
 
-  // ─── Time format ───────────────────────────────────────────────────────────
-
   bool get use24hFormat => _prefs?.getBool(_kUse24h) ?? false;
-
   Future<void> setUse24hFormat(bool value) async {
     await _prefs!.setBool(_kUse24h, value);
     notifyListeners();
   }
 
-  // ─── Show cancelled reminders ──────────────────────────────────────────────
-
-  bool get showCancelledReminders => _prefs?.getBool(_kShowCancelled) ?? true;
-
+  bool get showCancelledReminders => _prefs?.getBool(_kShowCancelled) ?? false;
   Future<void> setShowCancelledReminders(bool value) async {
     await _prefs!.setBool(_kShowCancelled, value);
     notifyListeners();
   }
 
-  // ─── Default repeat frequency ──────────────────────────────────────────────
-
   RepeatFrequency get defaultRepeat {
     final raw = _prefs?.getString(_kDefaultRepeat) ?? 'none';
-    return RepeatFrequency.values.firstWhere(
-      (v) => v.name == raw,
-      orElse: () => RepeatFrequency.none,
-    );
+    return RepeatFrequency.values.firstWhere((v) => v.name == raw, orElse: () => RepeatFrequency.none);
   }
-
   Future<void> setDefaultRepeat(RepeatFrequency freq) async {
     await _prefs!.setString(_kDefaultRepeat, freq.name);
     notifyListeners();
   }
 
-  // ─── Advance reminder alert (minutes before) ───────────────────────────────
-  // 0 = notify exactly at scheduled time, other values = also notify N min before.
-
   int get defaultLeadMinutes => _prefs?.getInt(_kDefaultLeadMin) ?? 0;
-
   Future<void> setDefaultLeadMinutes(int minutes) async {
     await _prefs!.setInt(_kDefaultLeadMin, minutes);
     notifyListeners();
   }
 
-  // ─── Helpers ───────────────────────────────────────────────────────────────
+  // Font settings accessors
+  double get fontSizeTitle => _prefs?.getDouble(_kFontSizeTitle) ?? 16.0;
+  Future<void> setFontSizeTitle(double size) async {
+    await _prefs!.setDouble(_kFontSizeTitle, size);
+    notifyListeners();
+  }
 
-  /// Format a [DateTime] according to the current time-format setting.
+  double get fontSizeBody => _prefs?.getDouble(_kFontSizeBody) ?? 13.0;
+  Future<void> setFontSizeBody(double size) async {
+    await _prefs!.setDouble(_kFontSizeBody, size);
+    notifyListeners();
+  }
+
+  double get fontSizeLabel => _prefs?.getDouble(_kFontSizeLabel) ?? 10.0;
+  Future<void> setFontSizeLabel(double size) async {
+    await _prefs!.setDouble(_kFontSizeLabel, size);
+    notifyListeners();
+  }
+
+  int get fontColorTitle => _prefs?.getInt(_kFontColorTitle) ?? 0xFF000000;
+  Future<void> setFontColorTitle(int value) async {
+    await _prefs!.setInt(_kFontColorTitle, value);
+    notifyListeners();
+  }
+
+  int get fontColorValue => _prefs?.getInt(_kFontColorGlobal) ?? 0xFF475569; // Default slate
+  Future<void> setFontColor(int value) async {
+    await _prefs!.setInt(_kFontColorGlobal, value);
+    notifyListeners();
+  }
+
+  String get fontStyleTitle => _prefs?.getString(_kFontStyleTitle) ?? 'bold';
+  Future<void> setFontStyleTitle(String style) async {
+    await _prefs!.setString(_kFontStyleTitle, style);
+    notifyListeners();
+  }
+
+  String get fontStyleBody => _prefs?.getString(_kFontStyleBody) ?? 'normal';
+  Future<void> setFontStyleBody(String style) async {
+    await _prefs!.setString(_kFontStyleBody, style);
+    notifyListeners();
+  }
+
+  String get fontStyleLabel => _prefs?.getString(_kFontStyleLabel) ?? 'normal';
+  Future<void> setFontStyleLabel(String style) async {
+    await _prefs!.setString(_kFontStyleLabel, style);
+    notifyListeners();
+  }
+
   String formatDateTime(DateTime dt) {
     final local = dt.isUtc ? dt.toLocal() : dt;
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    final day   = local.day;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final day = local.day;
     final month = months[local.month - 1];
-    final year  = local.year;
+    final year = local.year;
 
     if (use24hFormat) {
-      final h   = local.hour.toString().padLeft(2, '0');
+      final h = local.hour.toString().padLeft(2, '0');
       final min = local.minute.toString().padLeft(2, '0');
       return '$day $month $year · $h:$min';
     } else {
       final rawH = local.hour;
-      final h    = rawH > 12 ? rawH - 12 : (rawH == 0 ? 12 : rawH);
+      final h = rawH > 12 ? rawH - 12 : (rawH == 0 ? 12 : rawH);
       final ampm = rawH >= 12 ? 'PM' : 'AM';
-      final min  = local.minute.toString().padLeft(2, '0');
+      final min = local.minute.toString().padLeft(2, '0');
       return '$day $month $year · $h:$min $ampm';
     }
   }
 }
-
