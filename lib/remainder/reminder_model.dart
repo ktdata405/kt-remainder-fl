@@ -1,5 +1,7 @@
 enum RepeatFrequency { none, daily, weekly, monthly }
 
+enum ReminderPriority { low, medium, high }
+
 class Reminder {
   final int id;
   final String title;
@@ -7,6 +9,7 @@ class Reminder {
   final DateTime scheduledTime;
   final RepeatFrequency repeatFrequency;
   final bool isActive;
+  final ReminderPriority priority;
 
   Reminder({
     required this.id,
@@ -15,6 +18,7 @@ class Reminder {
     required this.scheduledTime,
     this.repeatFrequency = RepeatFrequency.none,
     this.isActive = true,
+    this.priority = ReminderPriority.medium,
   });
 
   Map<String, dynamic> toMap() {
@@ -25,11 +29,13 @@ class Reminder {
       'scheduledTime': scheduledTime.toIso8601String(),
       'repeatFrequency': repeatFrequency.name,
       'isActive': isActive,
+      'priority': priority.name,
     };
   }
 
   factory Reminder.fromMap(Map<String, dynamic> map) {
-    final repeatRaw = (map['repeatFrequency'] ?? 'none').toString();
+    final repeatRaw = (map['repeatFrequency'] ?? 'none').toString().toLowerCase();
+    final priorityRaw = (map['priority'] ?? 'medium').toString().toLowerCase();
     final activeRaw = map['isActive'];
 
     return Reminder(
@@ -38,10 +44,14 @@ class Reminder {
       body: map['body'],
       scheduledTime: DateTime.parse(map['scheduledTime']),
       repeatFrequency: RepeatFrequency.values.firstWhere(
-        (value) => value.name == repeatRaw,
+        (value) => value.name.toLowerCase() == repeatRaw,
         orElse: () => RepeatFrequency.none,
       ),
-      isActive: activeRaw is bool ? activeRaw : activeRaw.toString() == 'true',
+      isActive: activeRaw is bool ? activeRaw : activeRaw.toString().toLowerCase() == 'true',
+      priority: ReminderPriority.values.firstWhere(
+        (value) => value.name.toLowerCase() == priorityRaw,
+        orElse: () => ReminderPriority.medium,
+      ),
     );
   }
 
@@ -64,6 +74,7 @@ class Reminder {
         scheduledTime: scheduledTime,
         repeatFrequency: repeatFrequency,
         isActive: false,
+        priority: priority,
       );
     }
     var next = _stepInterval(scheduledTime);
@@ -77,6 +88,7 @@ class Reminder {
       scheduledTime: next,
       repeatFrequency: repeatFrequency,
       isActive: true,
+      priority: priority,
     );
   }
 

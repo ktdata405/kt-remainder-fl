@@ -8,6 +8,7 @@ void main() {
       title: 'Title',
       body: 'Body',
       scheduledTime: DateTime.utc(2026, 1, 1, 10, 30),
+      priority: ReminderPriority.high,
     );
 
     final encoded = original.toMap();
@@ -17,6 +18,7 @@ void main() {
     expect(decoded.title, original.title);
     expect(decoded.body, original.body);
     expect(decoded.scheduledTime, original.scheduledTime);
+    expect(decoded.priority, ReminderPriority.high);
   });
 
   group('advancedForCompletion', () {
@@ -24,6 +26,7 @@ void main() {
       DateTime time, {
       RepeatFrequency repeat = RepeatFrequency.none,
       bool isActive = true,
+      ReminderPriority priority = ReminderPriority.medium,
     }) =>
         Reminder(
           id: 1,
@@ -32,6 +35,7 @@ void main() {
           scheduledTime: time,
           repeatFrequency: repeat,
           isActive: isActive,
+          priority: priority,
         );
 
     test('one-time reminder is deactivated, date untouched', () {

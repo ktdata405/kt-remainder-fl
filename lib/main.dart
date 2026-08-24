@@ -62,97 +62,74 @@ class _ReminderAppState extends State<ReminderApp> {
 }
 
 ThemeData _buildTheme(Brightness brightness) {
-  const seedColor = Color(0xFF19A796);
+  const seedColor = Color(0xFF4F46E5); // Indigo
   final isDark = brightness == Brightness.dark;
-  final cs = ColorScheme.fromSeed(seedColor: seedColor, brightness: brightness);
+  final cs = ColorScheme.fromSeed(
+    seedColor: seedColor,
+    brightness: brightness,
+    surface: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+  );
 
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
     colorScheme: cs,
-    scaffoldBackgroundColor: isDark ? const Color(0xFF0C2625) : const Color(0xFFF3FBFA),
+    scaffoldBackgroundColor: cs.surface,
     appBarTheme: AppBarTheme(
-      backgroundColor: isDark ? const Color(0xFF0C2625) : const Color(0xFFF3FBFA),
+      backgroundColor: cs.surface,
       elevation: 0,
       scrolledUnderElevation: 0,
+      centerTitle: true,
       titleTextStyle: TextStyle(
-        fontWeight: FontWeight.w800,
-        fontSize: 24,
-        color: isDark ? const Color(0xFFE7FFFD) : const Color(0xFF154C49),
+        fontWeight: FontWeight.w900,
+        fontSize: 22,
+        letterSpacing: -0.5,
+        color: cs.onSurface,
       ),
-      iconTheme: IconThemeData(
-        color: isDark ? const Color(0xFF9EECE4) : const Color(0xFF19A796),
-      ),
+      iconTheme: IconThemeData(color: cs.primary),
     ),
     cardTheme: CardTheme(
-      elevation: isDark ? 0 : 2,
-      color: isDark ? const Color(0xFF153633) : Colors.white,
-      shadowColor: Colors.black.withValues(alpha: isDark ? 0.15 : 0.07),
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      elevation: 0,
+      color: isDark ? const Color(0xFF1E293B) : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(
+          color: isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE2E8F0),
+          width: 1,
+        ),
+      ),
       margin: EdgeInsets.zero,
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
-      backgroundColor: isDark ? const Color(0xFF2ED1BF) : const Color(0xFF19A796),
-      foregroundColor: Colors.white,
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-    ),
-    segmentedButtonTheme: SegmentedButtonThemeData(
-      style: ButtonStyle(
-        backgroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return isDark
-                ? const Color(0xFF2B6D67)
-                : const Color(0xFFD8F5F1);
-          }
-          return isDark ? const Color(0xFF194542) : const Color(0xFFEFFAF8);
-        }),
-        foregroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return isDark ? const Color(0xFFE7FFFD) : const Color(0xFF15635B);
-          }
-          return isDark ? const Color(0xFF9ED9D3) : const Color(0xFF3A7D77);
-        }),
-      ),
+      backgroundColor: cs.primary,
+      foregroundColor: cs.onPrimary,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: isDark
-          ? const Color(0xFF1B4542)
-          : const Color(0xFFEFFAF8),
+      fillColor: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(
-          color: isDark ? const Color(0xFF2D6862) : const Color(0xFFCEEAE6),
+          color: isDark ? Colors.white.withValues(alpha: 0.1) : const Color(0xFFE2E8F0),
         ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(
-          color: isDark ? const Color(0xFF5EE7D8) : const Color(0xFF16A394),
-          width: 2,
-        ),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.primary, width: 2),
       ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: cs.error),
-      ),
-      labelStyle: TextStyle(color: isDark ? const Color(0xFF9ACCC7) : const Color(0xFF648F8A)),
-      hintStyle: TextStyle(color: isDark ? const Color(0xFF5D8F8A) : const Color(0xFF88ABA6)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      backgroundColor: isDark ? const Color(0xFF1F5450) : const Color(0xFF135E57),
-      contentTextStyle: const TextStyle(color: Colors.white),
-    ),
-    dividerTheme: DividerThemeData(
-      color: isDark ? const Color(0xFF2C5A56) : const Color(0xFFD7ECE9),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: isDark ? const Color(0xFF4F46E5) : const Color(0xFF1E293B),
+      contentTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
     ),
   );
 }

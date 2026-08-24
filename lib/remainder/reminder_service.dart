@@ -122,6 +122,7 @@ class ReminderService {
       scheduledTime: reminder.scheduledTime,
       repeatFrequency: reminder.repeatFrequency,
       isActive: true,
+      priority: reminder.priority,
     );
     await _upsertRemote(active);
     await _scheduleNotification(active);
@@ -168,6 +169,7 @@ class ReminderService {
       scheduledTime: DateTime.now().add(by),
       repeatFrequency: existing.repeatFrequency,
       isActive: true,
+      priority: existing.priority,
     );
     await _upsertRemote(snoozed);
     await _scheduleNotification(snoozed);
@@ -296,6 +298,7 @@ class ReminderService {
       'scheduledTime': reminder.scheduledTime.toIso8601String(),
       'repeatFrequency': reminder.repeatFrequency.name,
       'isActive': reminder.isActive,
+      'priority': reminder.priority.name,
     });
     final uri = Uri.parse(_webAppUrl)
         .replace(queryParameters: {'action': 'upsert', 'data': data});
@@ -335,6 +338,7 @@ class ReminderService {
       scheduledTime: when,
       repeatFrequency: source.repeatFrequency,
       isActive: true,
+      priority: source.priority,
     );
     await _upsertRemote(target);
     await _scheduleNotification(target);
@@ -382,10 +386,14 @@ class ReminderService {
         body: body,
         scheduledTime: localScheduledTime,
         repeatFrequency: RepeatFrequency.values.firstWhere(
-          (v) => v.name == (row['repeatFrequency']?.toString() ?? 'none'),
+          (v) => v.name == (row['repeatFrequency']?.toString() ?? 'none').toLowerCase(),
           orElse: () => RepeatFrequency.none,
         ),
         isActive: _parseBool(row['isActive']),
+        priority: ReminderPriority.values.firstWhere(
+          (v) => v.name == (row['priority']?.toString() ?? 'medium').toLowerCase(),
+          orElse: () => ReminderPriority.medium,
+        ),
       );
     } catch (e) {
       debugPrint('Skipping malformed reminder row: $row\nError: $e');
@@ -517,7 +525,7 @@ class ReminderService {
       if (_webAppUrl.trim().isEmpty || _webAppUrl.contains('PASTE_YOUR')) return;
 
       if (actionId == _actionComplete) {
-        await _cancelRemoteById(id);
+        await completeReminder(id);
         await _notifications.cancel(id).catchError((_) {});
         return;
       }
@@ -565,6 +573,7 @@ class ReminderService {
           'scheduledTime': target.toIso8601String(),
           'repeatFrequency': payloadData['repeatFrequency'] ?? 'none',
           'isActive': true,
+          'priority': payloadData['priority'] ?? 'medium',
         };
         await _upsertRemoteMap(updated);
 
@@ -579,6 +588,10 @@ class ReminderService {
               orElse: () => RepeatFrequency.none,
             ),
             isActive: true,
+            priority: ReminderPriority.values.firstWhere(
+              (v) => v.name == (payloadData['priority'] ?? 'medium').toString(),
+              orElse: () => ReminderPriority.medium,
+            ),
           );
           await _scheduleNotification(reminder);
         }
