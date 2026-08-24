@@ -203,22 +203,17 @@ class _ReminderScreenState extends State<ReminderScreen> {
     if (!_isServiceReady) return;
     if (_busyReminderIds.contains(id)) return;
     final previous = List<Reminder>.from(_reminders);
+    final matches = previous.where((r) => r.id == id);
+    if (matches.isEmpty) return;
+    final advanced = matches.first.advancedForCompletion();
     _setReminderBusy(id, true);
-    _replaceReminderLocally(
-      id,
-      (r) => Reminder(
-        id: r.id,
-        title: r.title,
-        body: r.body,
-        scheduledTime: r.scheduledTime,
-        repeatFrequency: r.repeatFrequency,
-        isActive: false,
-      ),
-    );
+    _replaceReminderLocally(id, (_) => advanced);
     try {
       await _service.completeReminder(id);
       unawaited(_reload());
-      _snack('Reminder marked as completed');
+      _snack(advanced.isActive
+          ? 'Completed! Next on ${SettingsService.instance.formatDateTime(advanced.scheduledTime)}'
+          : 'Reminder marked as completed');
     } catch (e) {
       if (mounted) setState(() => _reminders = previous);
       _snack('Complete failed: $e');
@@ -597,24 +592,33 @@ class _ListScreenState extends State<_ListScreen> {
 
   Widget _filterChip(String label, _TaskFilter value) {
     final selected = _filter == value;
-    final cs = Theme.of(context).colorScheme;
     return Expanded(
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(11),
         onTap: () => setState(() => _filter = value),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 9),
           decoration: BoxDecoration(
-            color: selected ? cs.surface.withValues(alpha: 0.22) : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
+            color: selected ? Colors.white : Colors.white.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(11),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
           ),
           child: Text(
             label,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: selected ? 0.98 : 0.78),
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              fontSize: 13,
+              color: selected ? const Color(0xFF115E57) : Colors.white.withValues(alpha: 0.88),
+              fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
             ),
           ),
         ),
@@ -627,44 +631,60 @@ class _ListScreenState extends State<_ListScreen> {
     final cs = Theme.of(context).colorScheme;
     final visibleReminders = _filteredReminders();
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final headerGradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: isDark
+          ? const [Color(0xFF10312E), Color(0xFF17453F)]
+          : const [Color(0xFF17756D), Color(0xFF209184)],
+    );
+
     return Scaffold(
-      backgroundColor: const Color(0xFF1F716C),
+      backgroundColor: isDark ? const Color(0xFF10312E) : const Color(0xFF17756D),
       body: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 8, 18, 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(18, 10, 18, 16),
+              decoration: BoxDecoration(gradient: headerGradient),
               child: Column(
                 children: [
                   Row(
                     children: [
-                      IconButton(
-                        onPressed: () {},
-                        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white70),
-                      ),
-                      const Expanded(
-                        child: Text(
-                          'My Remainders',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 26,
+                      const SizedBox(width: 48),
+                      Expanded(
+                        child: ShaderMask(
+                          blendMode: BlendMode.srcIn,
+                          shaderCallback: (bounds) => const LinearGradient(
+                            colors: [Color(0xFFFFFFFF), Color(0xFFA9F7EA)],
+                          ).createShader(bounds),
+                          child: const Text(
+                            'My Remainders',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 27,
+                              letterSpacing: 0.4,
+                            ),
                           ),
                         ),
                       ),
                       IconButton(
                         onPressed: widget.onOpenSettings,
+                        tooltip: 'Settings',
                         icon: const Icon(Icons.settings_rounded, color: Colors.white),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.white.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(14),
                     ),
                     child: Row(
                       children: [
@@ -693,9 +713,9 @@ class _ListScreenState extends State<_ListScreen> {
                         children: [
                           Text(
                             'All Task',
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                   fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF1F4D4B),
+                                  color: cs.onSurface,
                                 ),
                           ),
                           const Spacer(),
@@ -728,12 +748,9 @@ class _ListScreenState extends State<_ListScreen> {
                             : visibleReminders.isEmpty
                                 ? _EmptyState(onAdd: () => _openAddSheet(context))
                                 : ListView.separated(
-                                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+                                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
                                     itemCount: visibleReminders.length,
-                                    separatorBuilder: (_, __) => const Padding(
-                                      padding: EdgeInsets.symmetric(horizontal: 12),
-                                      child: Divider(height: 1, thickness: 0.5),
-                                    ),
+                                    separatorBuilder: (_, __) => const SizedBox(height: 12),
                                     itemBuilder: (context, i) {
                                       final reminder = visibleReminders[i];
                                       final isBusy = widget.busyReminderIds.contains(reminder.id);
@@ -745,12 +762,11 @@ class _ListScreenState extends State<_ListScreen> {
                                         confirmDismiss: (_) => _confirmCancel(context, reminder),
                                         onDismissed: (_) => widget.onCancel(reminder.id),
                                         background: Container(
-                                          margin: const EdgeInsets.only(bottom: 12),
                                           padding: const EdgeInsets.symmetric(horizontal: 20),
                                           alignment: Alignment.centerRight,
                                           decoration: BoxDecoration(
                                             color: Theme.of(context).colorScheme.errorContainer,
-                                            borderRadius: BorderRadius.circular(16),
+                                            borderRadius: BorderRadius.circular(18),
                                           ),
                                           child: Icon(
                                             Icons.delete_forever_rounded,
@@ -785,8 +801,8 @@ class _ListScreenState extends State<_ListScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openAddSheet(context),
         tooltip: 'Add Reminder',
-        child: const Icon(Icons.add_rounded),
         elevation: 4,
+        child: const Icon(Icons.add_rounded),
       ),
     );
   }
@@ -825,6 +841,20 @@ class _ReminderCard extends StatelessWidget {
 
   String _fmt(DateTime dt) => SettingsService.instance.formatDateTime(dt);
 
+  IconData _repeatIcon(RepeatFrequency f) => switch (f) {
+        RepeatFrequency.daily => Icons.today_rounded,
+        RepeatFrequency.weekly => Icons.date_range_rounded,
+        RepeatFrequency.monthly => Icons.calendar_month_rounded,
+        _ => Icons.notifications_none_rounded,
+      };
+
+  String _repeatLabel(RepeatFrequency f) => switch (f) {
+        RepeatFrequency.daily => 'Daily',
+        RepeatFrequency.weekly => 'Weekly',
+        RepeatFrequency.monthly => 'Monthly',
+        _ => '',
+      };
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -836,208 +866,196 @@ class _ReminderCard extends StatelessWidget {
             ? 'Overdue'
             : 'Pending';
     final statusColor = switch (status) {
-      'Completed' => const Color(0xFF19A766),
-      'Overdue' => const Color(0xFFE53935),
-      _ => const Color(0xFFE58D2B),
-    };
-    final progress = switch (status) {
-      'Completed' => 1.0,
-      'Overdue' => 0.75,
-      _ => 0.0,
+      'Completed' => const Color(0xFF22B573),
+      'Overdue' => const Color(0xFFEF4444),
+      _ => const Color(0xFFF59E0B),
     };
     final isOverdue = reminder.isActive && reminder.scheduledTime.isBefore(DateTime.now());
-    final timeColor = isOverdue ? const Color(0xFFE53935) : const Color(0xFF0F766E);
+    final timeColor = isOverdue
+        ? const Color(0xFFF87171)
+        : isDark
+            ? const Color(0xFF5EEAD4)
+            : const Color(0xFF0F766E);
+    final titleColor = isDark ? const Color(0xFFEAFDF9) : const Color(0xFF16302E);
+    final subtitleColor = isDark ? const Color(0xFF96C9C2) : const Color(0xFF5F7F7B);
+    final statusIcon = switch (status) {
+      'Completed' => Icons.task_alt_rounded,
+      'Overdue' => Icons.notification_important_rounded,
+      _ => Icons.alarm_rounded,
+    };
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF143430) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFE4F2F0),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.28 : 0.06),
+            blurRadius: isDark ? 12 : 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(18),
           onTap: onTap,
-          child: Ink(
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(0, 8, 10, 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Left accent bar
-                  Container(
-                    width: 4,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: accent,
-                      borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [accent, accent.withValues(alpha: 0.60)],
                     ),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  const SizedBox(width: 10),
-                  // Main content
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Row 1: time chip + status badge
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: timeColor.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: timeColor.withValues(alpha: 0.30)),
+                  child: Icon(statusIcon, size: 22, color: Colors.white),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              reminder.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
+                                color: titleColor,
+                                decoration:
+                                    status == 'Completed' ? TextDecoration.lineThrough : null,
+                                decorationColor: subtitleColor,
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    isOverdue ? Icons.warning_amber_rounded : Icons.access_time_rounded,
-                                    size: 11,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: isDark ? 0.18 : 0.10),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: statusColor.withValues(alpha: 0.35)),
+                            ),
+                            child: Text(
+                              status.toUpperCase(),
+                              style: TextStyle(
+                                color: statusColor,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 10,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: timeColor.withValues(alpha: isDark ? 0.14 : 0.09),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: timeColor.withValues(alpha: 0.30)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  isOverdue
+                                      ? Icons.warning_amber_rounded
+                                      : Icons.access_time_rounded,
+                                  size: 12,
+                                  color: timeColor,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _fmt(reminder.scheduledTime),
+                                  style: TextStyle(
                                     color: timeColor,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 11,
                                   ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    _fmt(reminder.scheduledTime),
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: timeColor,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Spacer(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: statusColor.withValues(alpha: 0.10),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: statusColor.withValues(alpha: 0.30)),
-                              ),
-                              child: Text(
-                                status.toUpperCase(),
-                                style: TextStyle(
-                                  color: statusColor,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 10,
                                 ),
-                              ),
+                              ],
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        // Row 2: title + progress badge
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                reminder.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF204646),
-                                ),
-                              ),
+                          ),
+                          if (reminder.repeatFrequency != RepeatFrequency.none)
+                            _Chip(
+                              icon: _repeatIcon(reminder.repeatFrequency),
+                              label: _repeatLabel(reminder.repeatFrequency),
+                              color: accent,
                             ),
-                            const SizedBox(width: 8),
-                            _ProgressBadge(value: progress),
-                          ],
-                        ),
-                        const SizedBox(height: 3),
-                        // Row 3: body + action buttons
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                reminder.body.isEmpty ? 'My Department' : reminder.body,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: isDark ? const Color(0xFFA6CFCA) : Colors.grey.shade600,
-                                  fontWeight: FontWeight.w400,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ),
-                            if (reminder.isActive) ...[
-                              const SizedBox(width: 6),
-                              AnimatedOpacity(
-                                duration: const Duration(milliseconds: 200),
-                                opacity: isBusy ? 0.5 : 1,
-                                child: isBusy
-                                    ? const SizedBox(
-                                        width: 14, height: 14,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      )
-                                    : Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          _CompactActionButton(
-                                            icon: Icons.snooze_rounded,
-                                            color: const Color(0xFF0EA5E9),
-                                            onTap: onSnooze,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          _CompactActionButton(
-                                            icon: Icons.check_circle_rounded,
-                                            color: const Color(0xFF19A766),
-                                            onTap: onComplete,
-                                          ),
-                                        ],
-                                      ),
-                              ),
-                            ],
-                          ],
+                        ],
+                      ),
+                      if (reminder.body.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          reminder.body,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: subtitleColor,
+                            fontWeight: FontWeight.w400,
+                            fontSize: 12,
+                            height: 1.35,
+                          ),
                         ),
                       ],
-                    ),
+                    ],
+                  ),
+                ),
+                if (reminder.isActive) ...[
+                  const SizedBox(width: 10),
+                  AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: isBusy ? 0.5 : 1,
+                    child: isBusy
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Column(
+                            children: [
+                              _CompactActionButton(
+                                icon: Icons.check_circle_rounded,
+                                color: const Color(0xFF22B573),
+                                onTap: onComplete,
+                              ),
+                              const SizedBox(height: 6),
+                              _CompactActionButton(
+                                icon: Icons.snooze_rounded,
+                                color: const Color(0xFF38BDF8),
+                                onTap: onSnooze,
+                              ),
+                            ],
+                          ),
                   ),
                 ],
-              ),
+              ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ProgressBadge extends StatelessWidget {
-  const _ProgressBadge({required this.value});
-  final double value;
-
-  @override
-  Widget build(BuildContext context) {
-    final pct = (value * 100).round();
-    return Container(
-      width: 34,
-      height: 34,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFF75E6D4), width: 1.5),
-      ),
-      child: Center(
-        child: Text(
-          '$pct%',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                fontSize: 10,
-                color: const Color(0xFF2D6360),
-              ),
         ),
       ),
     );
@@ -1055,14 +1073,14 @@ class _CompactActionButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 30,
-        height: 30,
+        width: 34,
+        height: 34,
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(8),
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: color.withValues(alpha: 0.30)),
         ),
-        child: Icon(icon, size: 16, color: color),
+        child: Icon(icon, size: 18, color: color),
       ),
     );
   }

@@ -127,8 +127,25 @@ class ReminderService {
     await _scheduleNotification(active);
   }
 
+  /// Completes the current occurrence of a reminder.
+  ///
+  /// Repeating reminders (daily/weekly/monthly) remain active in the sheet
+  /// and their scheduled time advances to the next occurrence, with the local
+  /// notification re-armed for the new date. One-time reminders are cancelled
+  /// (deactivated), matching the previous behaviour.
   Future<void> completeReminder(int id) async {
-    await cancelReminder(id);
+    _assertInitialized();
+    final source = await _findReminderById(id);
+    if (source == null) {
+      throw StateError('Reminder not found for complete: $id');
+    }
+    final updated = source.advancedForCompletion();
+    if (!updated.isActive) {
+      await cancelReminder(id);
+      return;
+    }
+    await _upsertRemote(updated);
+    await _scheduleNotification(updated);
   }
 
   Future<void> snoozeReminder(int id, {Duration by = const Duration(minutes: 10)}) async {

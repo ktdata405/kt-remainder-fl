@@ -44,5 +44,48 @@ class Reminder {
       isActive: activeRaw is bool ? activeRaw : activeRaw.toString() == 'true',
     );
   }
+
+  /// Returns the reminder state after the user completes its current
+  /// occurrence.
+  ///
+  /// * One-time ([RepeatFrequency.none]) or already inactive reminders come
+  ///   back deactivated (`isActive: false`).
+  /// * Repeating reminders stay active and [scheduledTime] moves to the next
+  ///   occurrence: exactly one interval after the completed slot, then stepped
+  ///   forward until it lies in the future relative to [now] so overdue items
+  ///   skip missed days instead of resurfacing in the past.
+  Reminder advancedForCompletion({DateTime? now}) {
+    final ref = now ?? DateTime.now();
+    if (!isActive || repeatFrequency == RepeatFrequency.none) {
+      return Reminder(
+        id: id,
+        title: title,
+        body: body,
+        scheduledTime: scheduledTime,
+        repeatFrequency: repeatFrequency,
+        isActive: false,
+      );
+    }
+    var next = _stepInterval(scheduledTime);
+    while (!next.isAfter(ref)) {
+      next = _stepInterval(next);
+    }
+    return Reminder(
+      id: id,
+      title: title,
+      body: body,
+      scheduledTime: next,
+      repeatFrequency: repeatFrequency,
+      isActive: true,
+    );
+  }
+
+  DateTime _stepInterval(DateTime t) => switch (repeatFrequency) {
+        RepeatFrequency.daily => t.add(const Duration(days: 1)),
+        RepeatFrequency.weekly => t.add(const Duration(days: 7)),
+        RepeatFrequency.monthly =>
+          DateTime(t.year, t.month + 1, t.day, t.hour, t.minute),
+        RepeatFrequency.none => t,
+      };
 }
 
