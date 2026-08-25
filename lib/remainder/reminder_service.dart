@@ -10,6 +10,7 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../config/app_config.dart';
+import '../services/database_service.dart';
 import 'reminder_model.dart';
 
 const String _actionComplete = 'action_complete';
@@ -95,8 +96,12 @@ class ReminderService {
       customInterval: reminder.customInterval,
       customUnit: reminder.customUnit,
     );
-    await _upsertRemote(active);
+    // Offline first: save locally
+    await DatabaseService.instance.insertReminder(active);
     await _scheduleNotification(active);
+    
+    // Background sync
+    _upsertRemote(active).catchError((e) => debugPrint('Sync failed: $e'));
   }
 
   Future<void> completeReminder(int id) async {
@@ -104,12 +109,16 @@ class ReminderService {
     final source = await _findReminderById(id);
     if (source == null) throw StateError('Reminder not found: $id');
     final updated = source.advancedForCompletion();
+    
     if (!updated.isActive) {
       await cancelReminder(id);
       return;
     }
-    await _upsertRemote(updated);
+    
+    await DatabaseService.instance.updateReminder(updated);
     await _scheduleNotification(updated);
+    
+    _upsertRemote(updated).catchError((e) => debugPrint('Sync failed: $e'));
   }
 
   Future<void> snoozeReminder(int id, {Duration by = const Duration(minutes: 10)}) async {
@@ -127,8 +136,11 @@ class ReminderService {
       customInterval: source.customInterval,
       customUnit: source.customUnit,
     );
-    await _upsertRemote(snoozed);
+    
+    await DatabaseService.instance.updateReminder(snoozed);
     await _scheduleNotification(snoozed);
+    
+    _upsertRemote(snoozed).catchError((e) => debugPrint('Sync failed: $e'));
   }
 
   Future<void> snoozeReminderTomorrow(int id) async {
@@ -154,6 +166,10 @@ class ReminderService {
     return id;
   }
 
+  Future<List<Reminder>> getLocalReminders() async {
+    return await DatabaseService.instance.getAllReminders();
+  }
+
   Future<List<Reminder>> fetchRemindersFromSheet() async {
     _assertInitialized();
     final uri = Uri.parse(_webAppUrl).replace(queryParameters: {'action': 'fetch'});
@@ -170,7 +186,8 @@ class ReminderService {
   Future<void> cancelReminder(int id) async {
     _assertInitialized();
     if (!kIsWeb) await _notifications.cancel(id).catchError((_) {});
-    await _cancelRemoteById(id);
+    await DatabaseService.instance.deleteReminder(id);
+    _cancelRemoteById(id).catchError((e) => debugPrint('Sync failed: $e'));
   }
 
   Future<void> _cancelRemoteById(int id) async {
@@ -181,11 +198,49 @@ class ReminderService {
 
   Future<void> rescheduleActiveRemindersFromSheet() async {
     _assertInitialized();
-    if (!kIsWeb) await _notifications.cancelAll().catchError((_) {});
-    final reminders = await fetchRemindersFromSheet();
-    if (kIsWeb) _startWebDueReminderLoop(reminders);
-    for (final reminder in reminders.where((r) => r.isActive)) {
-      await _scheduleNotification(reminder);
+    
+    // 1. Load local first for immediate availability
+    final localReminders = await DatabaseService.instance.getAllReminders();
+    if (localReminders.isNotEmpty) {
+      if (!kIsWeb) await _notifications.cancelAll().catchError((_) {});
+      for (final reminder in localReminders.where((r) => r.isActive)) {
+        await _scheduleNotification(reminder);
+      }
+    }
+
+    // 2. Then background fetch from remote to sync
+    try {
+      final remoteReminders = await fetchRemindersFromSheet();
+      
+      // OPTIMIZATION: Check if remote data matches local data exactly to avoid redundant work
+      if (listEquals(localReminders, remoteReminders)) {
+        debugPrint('Sync skipped: Data matches local cache.');
+        return;
+      }
+
+      // Merge Logic: Update local with remote data, but don't clear everything 
+      // to avoid losing local-only items (like unsynced new reminders).
+      final remoteIds = remoteReminders.map((r) => r.id).toSet();
+      
+      // Update/Insert all remote reminders into local database
+      for (final r in remoteReminders) {
+        await DatabaseService.instance.insertReminder(r);
+      }
+      
+      // If the remote list is the source of truth for deletions, 
+      // we could remove local items not in remoteIds. 
+      // However, to be safe with offline usage, we only delete if the item was 
+      // explicitly cancelled or completed.
+      
+      final updatedList = await DatabaseService.instance.getAllReminders();
+      
+      if (!kIsWeb) await _notifications.cancelAll().catchError((_) {});
+      if (kIsWeb) _startWebDueReminderLoop(updatedList);
+      for (final reminder in updatedList.where((r) => r.isActive)) {
+        await _scheduleNotification(reminder);
+      }
+    } catch (e) {
+      debugPrint('Remote sync failed: $e');
     }
   }
 
@@ -217,8 +272,7 @@ class ReminderService {
   }
 
   Future<Reminder?> _findReminderById(int id) async {
-    final list = await fetchRemindersFromSheet();
-    return list.cast<Reminder?>().firstWhere((r) => r?.id == id, orElse: () => null);
+    return await DatabaseService.instance.getReminderById(id);
   }
 
   Future<void> _applySnooze(Reminder source, DateTime when) async {
@@ -263,7 +317,7 @@ class ReminderService {
       await _notifications.zonedSchedule(
         r.id, r.title, r.body, tzDateTime,
         const NotificationDetails(android: androidDetails),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: _matchComponentsFor(r.repeatFrequency),
         payload: jsonEncode(r.toMap()),

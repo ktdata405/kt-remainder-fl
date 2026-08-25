@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <application
-        android:label="My Remainders"
+        android:label="Remainder"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

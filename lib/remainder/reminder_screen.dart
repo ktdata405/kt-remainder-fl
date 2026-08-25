@@ -59,8 +59,14 @@ class _ReminderScreenState extends State<ReminderScreen> {
       await _service.initialize(webAppUrl: widget.webAppUrl);
       _attachWebDueReminderListener();
       _attachCustomSnoozeListener();
-      if (mounted) setState(() => _isServiceReady = true);
-      await _reload();
+      if (mounted) {
+        setState(() => _isServiceReady = true);
+        // Load local data immediately for instant UI
+        final local = await _service.getLocalReminders();
+        setState(() => _reminders = local);
+      }
+      // The service already triggers a background sync in initialize()
+      // We don't need to call _reload() here as it triggers another network fetch.
     } catch (e) {
       if (mounted) setState(() { _isServiceReady = false; _initializationError = e.toString(); });
     } finally {
@@ -87,8 +93,21 @@ class _ReminderScreenState extends State<ReminderScreen> {
     if (!_isServiceReady) return;
     if (mounted) setState(() { _isReloading = true; _fetchError = null; });
     try {
-      final list = await _service.fetchRemindersFromSheet();
-      if (mounted) setState(() => _reminders = list);
+      // First, load from local database for instant UI feedback
+      final localList = await _service.getLocalReminders();
+      if (mounted) setState(() => _reminders = localList);
+
+      // Then, trigger a background sync to keep data fresh from remote
+      // This ensures that even after a local action, the UI is consistent
+      // and we pick up any changes from the remote sheet eventually.
+      _service.rescheduleActiveRemindersFromSheet().then((_) async {
+        if (mounted) {
+          final updatedLocal = await _service.getLocalReminders();
+          setState(() => _reminders = updatedLocal);
+        }
+      }).catchError((e) {
+        debugPrint('Background sync failed: $e');
+      });
     } catch (e) {
       if (mounted) setState(() => _fetchError = e.toString());
     } finally {
@@ -520,6 +539,14 @@ class _ReminderCard extends StatelessWidget {
                             decoration: BoxDecoration(color: priorityColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
                             child: Text(reminder.priority.name.toUpperCase(), style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: priorityColor)),
                           ),
+                          if (isOverdue) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+                              child: const Text('OVERDUE', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Colors.red)),
+                            ),
+                          ],
                         ],
                       ),
                     ],

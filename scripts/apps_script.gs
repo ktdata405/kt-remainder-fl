@@ -13,31 +13,24 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SHEET_NAME = 'Reminders';
-const HEADERS = ['id', 'title', 'body', 'scheduledTime', 'repeatFrequency', 'isActive'];
+const HEADERS = ['id', 'title', 'body', 'scheduledTime', 'repeatFrequency', 'isActive', 'priority', 'customInterval', 'customUnit'];
 
 function getSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  // Try the dedicated "Reminders" tab first, then fall back to the first sheet.
   let sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
-
   if (!sheet) throw new Error('No sheets found in this spreadsheet.');
 
-  // Check whether row 1 already has our expected headers.
-  const lastCol = Math.max(sheet.getLastColumn(), HEADERS.length);
-  const firstRow = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-  const hasHeaders = firstRow[0] !== '' && firstRow[0] !== null;
+  // Check and update headers if necessary
+  const lastCol = sheet.getLastColumn();
+  const currentHeaders = lastCol > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
 
-  if (!hasHeaders) {
-    // Empty sheet — write headers.
+  if (currentHeaders.length < HEADERS.length) {
     sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
   }
 
   return sheet;
 }
 
-// Return the column index (0-based) for each expected header, handling sheets
-// where columns might be in a different order.
 function getColumnMap(sheet) {
   const row = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const map = {};
@@ -80,7 +73,6 @@ function fetchReminders() {
     .filter(row => row.some(cell => cell !== '' && cell !== null))
     .map(row => {
       try {
-        // Use column map for flexibility; fall back to positional if header not found.
         const get = (key, pos) => {
           const i = colMap[key] !== undefined ? colMap[key] : pos;
           return i < row.length ? row[i] : '';
@@ -92,17 +84,15 @@ function fetchReminders() {
         const rawTime = get('scheduledtime', 3);
         const freq = get('repeatfrequency', 4);
         const activeRaw = get('isactive', 5);
+        const priority = get('priority', 6) || 'medium';
+        const customInterval = get('custominterval', 7);
+        const customUnit = get('customunit', 8);
 
         if (!id || !rawTime) return null;
 
-        // Normalise date in script timezone (wall clock), not UTC.
         let scheduledTime;
         if (rawTime instanceof Date) {
-          scheduledTime = Utilities.formatDate(
-            rawTime,
-            Session.getScriptTimeZone(),
-            "yyyy-MM-dd'T'HH:mm:ss"
-          );
+          scheduledTime = rawTime.toISOString();
         } else {
           scheduledTime = String(rawTime);
         }
@@ -113,7 +103,10 @@ function fetchReminders() {
           body: body,
           scheduledTime: scheduledTime,
           repeatFrequency: freq ? String(freq) : 'none',
-          isActive: String(activeRaw).toLowerCase() === 'true' || activeRaw === true
+          isActive: String(activeRaw).toLowerCase() === 'true' || activeRaw === true,
+          priority: String(priority),
+          customInterval: customInterval !== '' ? Number(customInterval) : null,
+          customUnit: customUnit !== '' ? String(customUnit) : null
         };
       } catch (err) {
         return null;
@@ -124,17 +117,7 @@ function fetchReminders() {
 
 function upsertReminder(reminder) {
   const sheet = getSheet();
-  const colMap = getColumnMap(sheet);
   const data = sheet.getDataRange().getValues();
-
-  // If the sheet doesn't have our headers yet, add them.
-  const hasOurHeaders = colMap['id'] !== undefined && colMap['scheduledtime'] !== undefined;
-  if (!hasOurHeaders) {
-    // Append columns or start fresh if sheet is truly empty of structure.
-    if (data.length === 0 || (data.length === 1 && data[0].every(c => c === ''))) {
-      sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
-    }
-  }
 
   let rowIndex = -1;
   for (let i = 1; i < data.length; i++) {
@@ -145,23 +128,29 @@ function upsertReminder(reminder) {
   }
   if (rowIndex === -1) rowIndex = data.length + 1;
 
-  sheet.getRange(rowIndex, 1, 1, 6).setValues([[
+  sheet.getRange(rowIndex, 1, 1, HEADERS.length).setValues([[
     reminder.id,
     reminder.title,
     reminder.body,
     reminder.scheduledTime,
     reminder.repeatFrequency || 'none',
-    reminder.isActive.toString()
+    reminder.isActive.toString(),
+    reminder.priority || 'medium',
+    reminder.customInterval || '',
+    reminder.customUnit || ''
   ]]);
   return { success: true };
 }
 
 function cancelReminder(id) {
   const sheet = getSheet();
+  const colMap = getColumnMap(sheet);
   const data = sheet.getDataRange().getValues();
+  const activeCol = (colMap['isactive'] !== undefined ? colMap['isactive'] : 5) + 1;
+
   for (let i = 1; i < data.length; i++) {
     if (Number(data[i][0]) === id) {
-      sheet.getRange(i + 1, 6).setValue('false');
+      sheet.getRange(i + 1, activeCol).setValue('false');
       return { success: true };
     }
   }

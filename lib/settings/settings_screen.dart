@@ -18,11 +18,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final SettingsService _settings = SettingsService.instance;
 
   final List<int> _colors = [
-    0xFF000000, 0xFF4F46E5, 0xFF0D9488, 0xFFEF4444, 0xFFF59E0B, 0xFF10B981, 
-    0xFF3B82F6, 0xFF6366F1, 0xFF8B5CF6, 0xFFEC4899, 0xFFF43F5E, 0xFFD946EF,
-    0xFF06B6D4, 0xFF84CC16, 0xFFEAB308, 0xFFF97316, 0xFF71717A, 0xFF64748B,
-    0xFF78350F, 0xFF1E3A8A, 0xFF064E3B, 0xFF7F1D1D, 0xFF4C1D95, 0xFF831843,
-    0xFF164E63, 0xFF365314, 0xFF713F12, 0xFF0F172A, 0xFF431407, 0xFF171717,
+    0, 0xFF000000, 0xFFFFFFFF, 0xFF4F46E5, 0xFF0D9488, 0xFFEF4444, 0xFFF59E0B, 
+    0xFF10B981, 0xFF3B82F6, 0xFF6366F1, 0xFF8B5CF6, 0xFFEC4899, 0xFFF43F5E, 
+    0xFFD946EF, 0xFF06B6D4, 0xFF84CC16, 0xFFEAB308, 0xFFF97316, 0xFF71717A, 
+    0xFF64748B, 0xFF78350F, 0xFF1E3A8A, 0xFF064E3B, 0xFF7F1D1D, 0xFF4C1D95, 
+    0xFF831843, 0xFF164E63, 0xFF365314, 0xFF713F12, 0xFF0F172A, 0xFF431407, 
+    0xFF171717,
   ];
 
   @override
@@ -81,10 +82,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
 
           const SizedBox(height: 16),
-          const _SectionHeader(label: 'Typography', icon: Icons.text_fields, color: Colors.blue),
           _Group(
             backgroundColor: sectionBg,
-            child: Column(
+            child: ExpansionTile(
+              initiallyExpanded: false,
+              leading: const Icon(Icons.text_fields, color: Colors.blue),
+              title: const Text('Typography', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
               children: [
                 _FontSettingRow(
                   label: 'Titles',
@@ -294,6 +297,26 @@ class _ColorPicker extends StatelessWidget {
             runSpacing: 8,
             children: colors.map((c) {
               final isSel = selectedColor == c;
+              if (c == 0) {
+                return InkWell(
+                  onTap: () => onColorSelected(0),
+                  child: Container(
+                    width: 28, height: 28,
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: isSel ? Colors.blue : Colors.black12, width: 2),
+                    ),
+                    child: Center(
+                      child: Text('D', style: TextStyle(
+                        fontSize: 12, 
+                        fontWeight: FontWeight.bold, 
+                        color: isSel ? Colors.blue : Colors.grey
+                      )),
+                    ),
+                  ),
+                );
+              }
               return InkWell(
                 onTap: () => onColorSelected(c),
                 child: Container(
@@ -302,10 +325,13 @@ class _ColorPicker extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Color(c),
                     shape: BoxShape.circle,
-                    border: Border.all(color: isSel ? Colors.white : Colors.black12, width: 2),
+                    border: Border.all(
+                      color: isSel ? (c == 0xFFFFFFFF ? Colors.black26 : Colors.white) : Colors.black12, 
+                      width: 2
+                    ),
                     boxShadow: isSel ? [BoxShadow(color: Colors.black26, blurRadius: 4, offset: const Offset(0, 2))] : null,
                   ),
-                  child: isSel ? const Icon(Icons.check, color: Colors.white, size: 14) : null,
+                  child: isSel ? Icon(Icons.check, color: c == 0xFFFFFFFF ? Colors.black : Colors.white, size: 14) : null,
                 ),
               );
             }).toList(),

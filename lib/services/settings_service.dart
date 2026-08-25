@@ -103,13 +103,13 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  int get fontColorTitle => _prefs?.getInt(_kFontColorTitle) ?? 0xFF000000;
+  int get fontColorTitle => _prefs?.getInt(_kFontColorTitle) ?? 0;
   Future<void> setFontColorTitle(int value) async {
     await _prefs!.setInt(_kFontColorTitle, value);
     notifyListeners();
   }
 
-  int get fontColorValue => _prefs?.getInt(_kFontColorGlobal) ?? 0xFF475569; // Default slate
+  int get fontColorValue => _prefs?.getInt(_kFontColorGlobal) ?? 0;
   Future<void> setFontColor(int value) async {
     await _prefs!.setInt(_kFontColorGlobal, value);
     notifyListeners();

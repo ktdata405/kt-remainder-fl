@@ -70,8 +70,15 @@ class _ReminderAppState extends State<ReminderApp> {
     );
 
     final s = SettingsService.instance;
-    final titleColor = Color(s.fontColorTitle);
-    final globalColor = Color(s.fontColorValue);
+    
+    // Default color logic: White for dark theme, Black for light theme if not set (value == 0)
+    final titleColor = s.fontColorTitle == 0 
+        ? (isDark ? Colors.white : Colors.black) 
+        : Color(s.fontColorTitle);
+        
+    final globalColor = s.fontColorValue == 0 
+        ? (isDark ? Colors.white70 : const Color(0xFF475569)) 
+        : Color(s.fontColorValue);
 
     TextStyle getStyle(double size, String style, Color color) {
       return TextStyle(

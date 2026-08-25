@@ -42,12 +42,15 @@ class Reminder {
   }
 
   factory Reminder.fromMap(Map<String, dynamic> map) {
+    final idRaw = map['id'];
+    final id = idRaw is int ? idRaw : int.parse(idRaw.toString());
+    
     final repeatRaw = (map['repeatFrequency'] ?? 'none').toString().toLowerCase();
     final priorityRaw = (map['priority'] ?? 'medium').toString().toLowerCase();
     final activeRaw = map['isActive'];
 
     return Reminder(
-      id: map['id'],
+      id: id,
       title: map['title'],
       body: map['body'],
       scheduledTime: DateTime.parse(map['scheduledTime']),
@@ -126,4 +129,31 @@ class Reminder {
       _ => t.add(const Duration(days: 1)),
     };
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Reminder &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          title == other.title &&
+          body == other.body &&
+          scheduledTime.isAtSameMomentAs(other.scheduledTime) &&
+          repeatFrequency == other.repeatFrequency &&
+          isActive == other.isActive &&
+          priority == other.priority &&
+          customInterval == other.customInterval &&
+          customUnit == other.customUnit;
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      title.hashCode ^
+      body.hashCode ^
+      scheduledTime.hashCode ^
+      repeatFrequency.hashCode ^
+      isActive.hashCode ^
+      priority.hashCode ^
+      customInterval.hashCode ^
+      customUnit.hashCode;
 }
