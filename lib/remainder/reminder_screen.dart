@@ -64,6 +64,12 @@ class _ReminderScreenState extends State<ReminderScreen> {
         // Load local data immediately for instant UI
         final local = await _service.getLocalReminders();
         setState(() => _reminders = local);
+
+        // Check for pending custom snooze from notification
+        final pendingSnoozeId = await _service.consumePendingCustomSnoozeRequest();
+        if (pendingSnoozeId != null) {
+          _showSnoozePickerForId(pendingSnoozeId);
+        }
       }
       // The service already triggers a background sync in initialize()
       // We don't need to call _reload() here as it triggers another network fetch.
@@ -100,14 +106,12 @@ class _ReminderScreenState extends State<ReminderScreen> {
       // Then, trigger a background sync to keep data fresh from remote
       // This ensures that even after a local action, the UI is consistent
       // and we pick up any changes from the remote sheet eventually.
-      _service.rescheduleActiveRemindersFromSheet().then((_) async {
-        if (mounted) {
-          final updatedLocal = await _service.getLocalReminders();
-          setState(() => _reminders = updatedLocal);
-        }
-      }).catchError((e) {
-        debugPrint('Background sync failed: $e');
-      });
+      await _service.rescheduleActiveRemindersFromSheet();
+      
+      if (mounted) {
+        final updatedLocal = await _service.getLocalReminders();
+        setState(() => _reminders = updatedLocal);
+      }
     } catch (e) {
       if (mounted) setState(() => _fetchError = e.toString());
     } finally {
@@ -343,6 +347,13 @@ class _ListScreenState extends State<_ListScreen> {
                     ],
                   ),
                   const Spacer(),
+                  IconButton.filledTonal(
+                    onPressed: widget.isReloading ? null : widget.onRefresh,
+                    icon: widget.isReloading 
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.refresh_rounded),
+                  ),
+                  const SizedBox(width: 8),
                   IconButton.filledTonal(onPressed: widget.onToggleTheme, icon: Icon(widget.isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded)),
                 ],
               ),
@@ -591,6 +602,8 @@ class _ReminderCard extends StatelessWidget {
 
   String _repeatLabel(Reminder r) {
     if (r.repeatFrequency == RepeatFrequency.custom) return 'Every ${r.customInterval} ${r.customUnit}';
+    if (r.repeatFrequency == RepeatFrequency.weekdays) return 'Weekdays';
+    if (r.repeatFrequency == RepeatFrequency.weekends) return 'Weekends';
     return r.repeatFrequency.name[0].toUpperCase() + r.repeatFrequency.name.substring(1);
   }
 }
@@ -699,7 +712,42 @@ class _AddReminderSheetState extends State<_AddReminderSheet> {
 
   Widget _pickBtn(String label, String value, IconData icon, VoidCallback onTap) => InkWell(onTap: onTap, child: Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1))), child: Row(children: [Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary), const SizedBox(width: 12), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7), fontWeight: FontWeight.w800)), Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14))])])));
 
-  Widget _dropdown<T>(String label, T value, List<T> items, ValueChanged<T?> onChanged) => Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4), decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.05), border: Border.all(color: Colors.grey.withValues(alpha: 0.1)), borderRadius: BorderRadius.circular(16)), child: DropdownButtonHideUnderline(child: DropdownButton<T>(value: value, isExpanded: true, items: items.map((i) => DropdownMenuItem(value: i, child: Text(i is Enum ? i.name.toUpperCase() : i.toString(), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)))).toList(), onChanged: onChanged)));
+  Widget _dropdown<T>(String label, T value, List<T> items, ValueChanged<T?> onChanged) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4), 
+    decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.05), border: Border.all(color: Colors.grey.withValues(alpha: 0.1)), borderRadius: BorderRadius.circular(16)), 
+    child: DropdownButtonHideUnderline(
+      child: DropdownButton<T>(
+        value: value, 
+        isExpanded: true, 
+        items: items.map((i) {
+          String text = '';
+          if (i is RepeatFrequency) {
+            text = switch (i) {
+              RepeatFrequency.none => 'None',
+              RepeatFrequency.daily => 'Daily',
+              RepeatFrequency.weekly => 'Weekly',
+              RepeatFrequency.monthly => 'Monthly',
+              RepeatFrequency.weekdays => 'Weekdays (Mon-Fri)',
+              RepeatFrequency.weekends => 'Weekends (Sat-Sun)',
+              RepeatFrequency.yearly => 'Yearly',
+              RepeatFrequency.monday => 'Every Monday',
+              RepeatFrequency.tuesday => 'Every Tuesday',
+              RepeatFrequency.wednesday => 'Every Wednesday',
+              RepeatFrequency.thursday => 'Every Thursday',
+              RepeatFrequency.friday => 'Every Friday',
+              RepeatFrequency.saturday => 'Every Saturday',
+              RepeatFrequency.sunday => 'Every Sunday',
+              RepeatFrequency.custom => 'Custom...',
+            };
+          } else {
+            text = i.toString().toUpperCase();
+          }
+          return DropdownMenuItem(value: i, child: Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)));
+        }).toList(), 
+        onChanged: onChanged
+      )
+    )
+  );
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate() || _selectedDateTime == null) return;

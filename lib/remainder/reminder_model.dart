@@ -1,4 +1,8 @@
-enum RepeatFrequency { none, daily, weekly, monthly, weekdays, yearly, custom }
+enum RepeatFrequency { 
+  none, daily, weekly, monthly, weekdays, weekends, yearly, 
+  monday, tuesday, wednesday, thursday, friday, saturday, sunday,
+  custom 
+}
 
 enum ReminderPriority { low, medium, high }
 
@@ -106,7 +110,15 @@ class Reminder {
         RepeatFrequency.monthly =>
           DateTime(t.year, t.month + 1, t.day, t.hour, t.minute),
         RepeatFrequency.weekdays => _nextWeekday(t),
+        RepeatFrequency.weekends => _nextWeekend(t),
         RepeatFrequency.yearly => DateTime(t.year + 1, t.month, t.day, t.hour, t.minute),
+        RepeatFrequency.monday => _nextDayOfWeek(t, DateTime.monday),
+        RepeatFrequency.tuesday => _nextDayOfWeek(t, DateTime.tuesday),
+        RepeatFrequency.wednesday => _nextDayOfWeek(t, DateTime.wednesday),
+        RepeatFrequency.thursday => _nextDayOfWeek(t, DateTime.thursday),
+        RepeatFrequency.friday => _nextDayOfWeek(t, DateTime.friday),
+        RepeatFrequency.saturday => _nextDayOfWeek(t, DateTime.saturday),
+        RepeatFrequency.sunday => _nextDayOfWeek(t, DateTime.sunday),
         RepeatFrequency.custom => _stepCustom(t),
         RepeatFrequency.none => t,
       };
@@ -114,6 +126,22 @@ class Reminder {
   DateTime _nextWeekday(DateTime t) {
     var next = t.add(const Duration(days: 1));
     while (next.weekday == DateTime.saturday || next.weekday == DateTime.sunday) {
+      next = next.add(const Duration(days: 1));
+    }
+    return next;
+  }
+
+  DateTime _nextWeekend(DateTime t) {
+    var next = t.add(const Duration(days: 1));
+    while (next.weekday != DateTime.saturday && next.weekday != DateTime.sunday) {
+      next = next.add(const Duration(days: 1));
+    }
+    return next;
+  }
+
+  DateTime _nextDayOfWeek(DateTime t, int targetDay) {
+    var next = t.add(const Duration(days: 1));
+    while (next.weekday != targetDay) {
       next = next.add(const Duration(days: 1));
     }
     return next;

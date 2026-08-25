@@ -14,11 +14,7 @@ import '../services/database_service.dart';
 import 'reminder_model.dart';
 
 const String _actionComplete = 'action_complete';
-const String _actionSnooze5 = 'action_snooze_5m';
-const String _actionSnooze10 = 'action_snooze_10m';
-const String _actionSnooze30 = 'action_snooze_30m';
-const String _actionSnooze60 = 'action_snooze_60m';
-const String _actionSnoozeTomorrow = 'action_snooze_tomorrow';
+const String _actionSnooze1h = 'action_snooze_1h';
 const String _actionSnoozeCustom = 'action_snooze_custom';
 const String _kPendingCustomSnoozeId = 'pending_custom_snooze_id';
 
@@ -218,19 +214,21 @@ class ReminderService {
         return;
       }
 
-      // Merge Logic: Update local with remote data, but don't clear everything 
-      // to avoid losing local-only items (like unsynced new reminders).
+      // Sync Logic: Update local with remote data, and remove local items not in remote.
       final remoteIds = remoteReminders.map((r) => r.id).toSet();
       
       // Update/Insert all remote reminders into local database
       for (final r in remoteReminders) {
         await DatabaseService.instance.insertReminder(r);
       }
-      
-      // If the remote list is the source of truth for deletions, 
-      // we could remove local items not in remoteIds. 
-      // However, to be safe with offline usage, we only delete if the item was 
-      // explicitly cancelled or completed.
+
+      // Remove local items that are no longer on the sheet
+      for (final r in localReminders) {
+        if (!remoteIds.contains(r.id)) {
+          await DatabaseService.instance.deleteReminder(r.id);
+          if (!kIsWeb) await _notifications.cancel(r.id).catchError((_) {});
+        }
+      }
       
       final updatedList = await DatabaseService.instance.getAllReminders();
       
@@ -264,11 +262,6 @@ class ReminderService {
     final uri = Uri.parse(_webAppUrl).replace(queryParameters: {'action': 'upsert', 'data': data});
     final response = await http.get(uri);
     if (response.statusCode != 200) throw StateError('Upsert failed: ${response.body}');
-  }
-
-  Future<void> _upsertRemoteMap(Map<String, dynamic> data) async {
-    final uri = Uri.parse(_webAppUrl).replace(queryParameters: {'action': 'upsert', 'data': jsonEncode(data)});
-    await http.get(uri).timeout(const Duration(seconds: 10));
   }
 
   Future<Reminder?> _findReminderById(int id) async {
@@ -309,8 +302,10 @@ class ReminderService {
       const androidDetails = AndroidNotificationDetails(
         'reminders_channel', 'Reminders',
         importance: Importance.max, priority: Priority.high,
+        groupKey: 'com.example.kt_remainder_fl.REMINDERS',
         actions: [
           AndroidNotificationAction(_actionComplete, 'Complete', cancelNotification: true),
+          AndroidNotificationAction(_actionSnooze1h, 'Snooze 1h', cancelNotification: true),
           AndroidNotificationAction(_actionSnoozeCustom, 'Snooze', cancelNotification: true),
         ],
       );
@@ -327,11 +322,23 @@ class ReminderService {
 
   Future<void> handleNotificationAction(NotificationResponse resp) async {
     final actionId = resp.actionId;
-    if (actionId == null || actionId.isEmpty) return;
     try {
       final payloadData = jsonDecode(resp.payload ?? '{}') as Map<String, dynamic>;
       final id = payloadData['id'] as int?;
       if (id == null) return;
+
+      // Ensure service is initialized for background actions
+      if (!_isInitialized) {
+        final prefs = await SharedPreferences.getInstance();
+        final url = prefs.getString('web_app_url') ?? kWebAppUrl;
+        await initialize(webAppUrl: url);
+      }
+
+      if (actionId == _actionSnooze1h) {
+        await snoozeReminder(id, by: const Duration(hours: 1));
+        await _notifications.cancel(id).catchError((_) {});
+        return;
+      }
 
       if (actionId == _actionSnoozeCustom) {
         await _notifications.cancel(id).catchError((_) {});
@@ -374,7 +381,15 @@ class ReminderService {
       RepeatFrequency.weekly => now.weekday == sch.weekday && now.hour == sch.hour && now.minute == sch.minute,
       RepeatFrequency.monthly => now.day == sch.day && now.hour == sch.hour && now.minute == sch.minute,
       RepeatFrequency.weekdays => now.weekday < 6 && now.hour == sch.hour && now.minute == sch.minute,
+      RepeatFrequency.weekends => now.weekday >= 6 && now.hour == sch.hour && now.minute == sch.minute,
       RepeatFrequency.yearly => now.month == sch.month && now.day == sch.day && now.hour == sch.hour && now.minute == sch.minute,
+      RepeatFrequency.monday => now.weekday == DateTime.monday && now.hour == sch.hour && now.minute == sch.minute,
+      RepeatFrequency.tuesday => now.weekday == DateTime.tuesday && now.hour == sch.hour && now.minute == sch.minute,
+      RepeatFrequency.wednesday => now.weekday == DateTime.wednesday && now.hour == sch.hour && now.minute == sch.minute,
+      RepeatFrequency.thursday => now.weekday == DateTime.thursday && now.hour == sch.hour && now.minute == sch.minute,
+      RepeatFrequency.friday => now.weekday == DateTime.friday && now.hour == sch.hour && now.minute == sch.minute,
+      RepeatFrequency.saturday => now.weekday == DateTime.saturday && now.hour == sch.hour && now.minute == sch.minute,
+      RepeatFrequency.sunday => now.weekday == DateTime.sunday && now.hour == sch.hour && now.minute == sch.minute,
       RepeatFrequency.custom => _isCustomDue(r, now),
     };
   }
@@ -400,7 +415,15 @@ class ReminderService {
     RepeatFrequency.weekly => DateTimeComponents.dayOfWeekAndTime,
     RepeatFrequency.monthly => DateTimeComponents.dayOfMonthAndTime,
     RepeatFrequency.weekdays => DateTimeComponents.time, // handled via loop/nextSchedule
+    RepeatFrequency.weekends => DateTimeComponents.time,
     RepeatFrequency.yearly => DateTimeComponents.dateAndTime,
+    RepeatFrequency.monday => DateTimeComponents.dayOfWeekAndTime,
+    RepeatFrequency.tuesday => DateTimeComponents.dayOfWeekAndTime,
+    RepeatFrequency.wednesday => DateTimeComponents.dayOfWeekAndTime,
+    RepeatFrequency.thursday => DateTimeComponents.dayOfWeekAndTime,
+    RepeatFrequency.friday => DateTimeComponents.dayOfWeekAndTime,
+    RepeatFrequency.saturday => DateTimeComponents.dayOfWeekAndTime,
+    RepeatFrequency.sunday => DateTimeComponents.dayOfWeekAndTime,
     _ => null,
   };
 }
