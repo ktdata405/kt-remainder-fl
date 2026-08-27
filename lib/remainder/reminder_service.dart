@@ -11,6 +11,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../config/app_config.dart';
 import '../services/database_service.dart';
+import '../services/settings_service.dart';
 import 'reminder_model.dart';
 
 const String _actionComplete = 'action_complete';
@@ -42,6 +43,7 @@ class ReminderService {
   bool _isInitialized = false;
   Timer? _webReminderTimer;
   final Set<String> _webShownReminderKeys = <String>{};
+  List<Reminder> _cachedReminders = [];
 
   Stream<Reminder> get webDueReminderStream => _webDueReminderController.stream;
   Stream<int> get customSnoozeRequestStream => _customSnoozeRequestController.stream;
@@ -52,6 +54,7 @@ class ReminderService {
     _webReminderTimer?.cancel();
     _webReminderTimer = null;
     _webShownReminderKeys.clear();
+    _cachedReminders.clear();
   }
 
   Future<void> initialize({required String webAppUrl}) async {
@@ -93,9 +96,15 @@ class ReminderService {
       customUnit: reminder.customUnit,
     );
     // Offline first: save locally
-    await DatabaseService.instance.insertReminder(active);
+    if (SettingsService.instance.useLocalStorage) {
+      await DatabaseService.instance.insertReminder(active);
+    }
     await _scheduleNotification(active);
     
+    // Update cache
+    _cachedReminders.removeWhere((r) => r.id == active.id);
+    _cachedReminders.add(active);
+
     // Background sync
     _upsertRemote(active).catchError((e) => debugPrint('Sync failed: $e'));
   }
@@ -111,9 +120,15 @@ class ReminderService {
       return;
     }
     
-    await DatabaseService.instance.updateReminder(updated);
+    if (SettingsService.instance.useLocalStorage) {
+      await DatabaseService.instance.updateReminder(updated);
+    }
     await _scheduleNotification(updated);
     
+    // Update cache
+    _cachedReminders.removeWhere((r) => r.id == updated.id);
+    _cachedReminders.add(updated);
+
     _upsertRemote(updated).catchError((e) => debugPrint('Sync failed: $e'));
   }
 
@@ -133,9 +148,15 @@ class ReminderService {
       customUnit: source.customUnit,
     );
     
-    await DatabaseService.instance.updateReminder(snoozed);
+    if (SettingsService.instance.useLocalStorage) {
+      await DatabaseService.instance.updateReminder(snoozed);
+    }
     await _scheduleNotification(snoozed);
     
+    // Update cache
+    _cachedReminders.removeWhere((r) => r.id == snoozed.id);
+    _cachedReminders.add(snoozed);
+
     _upsertRemote(snoozed).catchError((e) => debugPrint('Sync failed: $e'));
   }
 
@@ -163,6 +184,9 @@ class ReminderService {
   }
 
   Future<List<Reminder>> getLocalReminders() async {
+    if (!SettingsService.instance.useLocalStorage) {
+      return _cachedReminders;
+    }
     return await DatabaseService.instance.getAllReminders();
   }
 
@@ -176,13 +200,17 @@ class ReminderService {
     final rows = (decoded as List<dynamic>).cast<Map<String, dynamic>>();
     final reminders = rows.map(_mapToReminder).whereType<Reminder>().toList();
     reminders.sort((a, b) => a.scheduledTime.compareTo(b.scheduledTime));
+    _cachedReminders = List.from(reminders);
     return reminders;
   }
 
   Future<void> cancelReminder(int id) async {
     _assertInitialized();
     if (!kIsWeb) await _notifications.cancel(id).catchError((_) {});
-    await DatabaseService.instance.deleteReminder(id);
+    if (SettingsService.instance.useLocalStorage) {
+      await DatabaseService.instance.deleteReminder(id);
+    }
+    _cachedReminders.removeWhere((r) => r.id == id);
     _cancelRemoteById(id).catchError((e) => debugPrint('Sync failed: $e'));
   }
 
@@ -196,10 +224,13 @@ class ReminderService {
     _assertInitialized();
     
     // 1. Load local first for immediate availability
-    final localReminders = await DatabaseService.instance.getAllReminders();
-    if (localReminders.isNotEmpty) {
+    final listToReschedule = SettingsService.instance.useLocalStorage 
+        ? await DatabaseService.instance.getAllReminders()
+        : _cachedReminders;
+
+    if (listToReschedule.isNotEmpty) {
       if (!kIsWeb) await _notifications.cancelAll().catchError((_) {});
-      for (final reminder in localReminders.where((r) => r.isActive)) {
+      for (final reminder in listToReschedule.where((r) => r.isActive)) {
         await _scheduleNotification(reminder);
       }
     }
@@ -207,30 +238,36 @@ class ReminderService {
     // 2. Then background fetch from remote to sync
     try {
       final remoteReminders = await fetchRemindersFromSheet();
+      _cachedReminders = List.from(remoteReminders);
       
-      // OPTIMIZATION: Check if remote data matches local data exactly to avoid redundant work
-      if (listEquals(localReminders, remoteReminders)) {
-        debugPrint('Sync skipped: Data matches local cache.');
-        return;
-      }
+      if (SettingsService.instance.useLocalStorage) {
+        final localReminders = await DatabaseService.instance.getAllReminders();
+        // OPTIMIZATION: Check if remote data matches local data exactly to avoid redundant work
+        if (listEquals(localReminders, remoteReminders)) {
+          debugPrint('Sync skipped: Data matches local cache.');
+          return;
+        }
 
-      // Sync Logic: Update local with remote data, and remove local items not in remote.
-      final remoteIds = remoteReminders.map((r) => r.id).toSet();
-      
-      // Update/Insert all remote reminders into local database
-      for (final r in remoteReminders) {
-        await DatabaseService.instance.insertReminder(r);
-      }
+        // Sync Logic: Update local with remote data, and remove local items not in remote.
+        final remoteIds = remoteReminders.map((r) => r.id).toSet();
+        
+        // Update/Insert all remote reminders into local database
+        for (final r in remoteReminders) {
+          await DatabaseService.instance.insertReminder(r);
+        }
 
-      // Remove local items that are no longer on the sheet
-      for (final r in localReminders) {
-        if (!remoteIds.contains(r.id)) {
-          await DatabaseService.instance.deleteReminder(r.id);
-          if (!kIsWeb) await _notifications.cancel(r.id).catchError((_) {});
+        // Remove local items that are no longer on the sheet
+        for (final r in localReminders) {
+          if (!remoteIds.contains(r.id)) {
+            await DatabaseService.instance.deleteReminder(r.id);
+            if (!kIsWeb) await _notifications.cancel(r.id).catchError((_) {});
+          }
         }
       }
       
-      final updatedList = await DatabaseService.instance.getAllReminders();
+      final updatedList = SettingsService.instance.useLocalStorage
+          ? await DatabaseService.instance.getAllReminders()
+          : _cachedReminders;
       
       if (!kIsWeb) await _notifications.cancelAll().catchError((_) {});
       if (kIsWeb) _startWebDueReminderLoop(updatedList);
@@ -265,7 +302,18 @@ class ReminderService {
   }
 
   Future<Reminder?> _findReminderById(int id) async {
-    return await DatabaseService.instance.getReminderById(id);
+    if (SettingsService.instance.useLocalStorage) {
+      final local = await DatabaseService.instance.getReminderById(id);
+      if (local != null) return local;
+    }
+    // Try cache if local DB is off or item not found locally
+    try {
+      return _cachedReminders.firstWhere((r) => r.id == id);
+    } catch (_) {
+      // If not in cache, we might need to fetch from sheet, 
+      // but usually the cache should be up to date if we just showed it in the UI.
+      return null;
+    }
   }
 
   Future<void> _applySnooze(Reminder source, DateTime when) async {

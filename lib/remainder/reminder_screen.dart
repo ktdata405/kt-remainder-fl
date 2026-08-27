@@ -61,9 +61,17 @@ class _ReminderScreenState extends State<ReminderScreen> {
       _attachCustomSnoozeListener();
       if (mounted) {
         setState(() => _isServiceReady = true);
-        // Load local data immediately for instant UI
-        final local = await _service.getLocalReminders();
-        setState(() => _reminders = local);
+        
+        if (SettingsService.instance.useLocalStorage) {
+          // Load local data immediately for instant UI
+          final local = await _service.getLocalReminders();
+          setState(() => _reminders = local);
+        } else {
+          // If local storage is disabled, we need to wait for the first fetch
+          await _service.rescheduleActiveRemindersFromSheet();
+          final remote = await _service.getLocalReminders();
+          setState(() => _reminders = remote);
+        }
 
         // Check for pending custom snooze from notification
         final pendingSnoozeId = await _service.consumePendingCustomSnoozeRequest();
@@ -762,7 +770,7 @@ class _FetchErrorState extends StatelessWidget {
   final String error; final VoidCallback onRetry;
   const _FetchErrorState({required this.error, required this.onRetry});
   @override
-  Widget build(BuildContext context) { return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, size: 48, color: Colors.red), const SizedBox(height: 16), Text('Failed to load tasks'), TextButton(onPressed: onRetry, child: const Text('Retry'))])); }
+  Widget build(BuildContext context) { return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, size: 48, color: Colors.red), const SizedBox(height: 16), const Text('Failed to load tasks'), TextButton(onPressed: onRetry, child: const Text('Retry'))])); }
 }
 
 class _EmptyState extends StatelessWidget {

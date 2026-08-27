@@ -155,6 +155,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     widget.onSettingsChanged();
                   },
                 ),
+                _SwitchTile(
+                  icon: Icons.storage_rounded,
+                  title: 'Use Local Storage',
+                  value: _settings.useLocalStorage,
+                  onChanged: (v) async {
+                    await _settings.setUseLocalStorage(v);
+                    setState(() {});
+                    widget.onSettingsChanged();
+                  },
+                ),
                 _DropdownTile<RepeatFrequency>(
                   label: 'Default Repeat',
                   value: _settings.defaultRepeat,
@@ -188,8 +198,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const _SectionHeader(label: 'About', icon: Icons.info_outline, color: Colors.grey),
           _Group(
             backgroundColor: sectionBg,
-            child: Column(
-              children: const [
+            child: const Column(
+              children: [
                 ListTile(
                   leading: Icon(Icons.info_outline),
                   title: Text('App Version', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
@@ -329,7 +339,7 @@ class _ColorPicker extends StatelessWidget {
                       color: isSel ? (c == 0xFFFFFFFF ? Colors.black26 : Colors.white) : Colors.black12, 
                       width: 2
                     ),
-                    boxShadow: isSel ? [BoxShadow(color: Colors.black26, blurRadius: 4, offset: const Offset(0, 2))] : null,
+                    boxShadow: isSel ? const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))] : null,
                   ),
                   child: isSel ? Icon(Icons.check, color: c == 0xFFFFFFFF ? Colors.black : Colors.white, size: 14) : null,
                 ),

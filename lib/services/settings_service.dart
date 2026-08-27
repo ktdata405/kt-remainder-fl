@@ -14,6 +14,7 @@ class SettingsService extends ChangeNotifier {
   static const _kUse24h            = 'use_24h';
   static const _kShowCancelled     = 'show_cancelled';
   static const _kDefaultLeadMin    = 'default_lead_min';
+  static const _kUseLocalStorage   = 'use_local_storage';
   
   // Font settings
   static const _kFontSizeTitle     = 'font_size_title';
@@ -81,6 +82,12 @@ class SettingsService extends ChangeNotifier {
   int get defaultLeadMinutes => _prefs?.getInt(_kDefaultLeadMin) ?? 0;
   Future<void> setDefaultLeadMinutes(int minutes) async {
     await _prefs!.setInt(_kDefaultLeadMin, minutes);
+    notifyListeners();
+  }
+
+  bool get useLocalStorage => _prefs?.getBool(_kUseLocalStorage) ?? true;
+  Future<void> setUseLocalStorage(bool value) async {
+    await _prefs!.setBool(_kUseLocalStorage, value);
     notifyListeners();
   }
 
