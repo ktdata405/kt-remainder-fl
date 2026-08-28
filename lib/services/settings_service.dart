@@ -85,7 +85,7 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool get useLocalStorage => _prefs?.getBool(_kUseLocalStorage) ?? true;
+  bool get useLocalStorage => _prefs?.getBool(_kUseLocalStorage) ?? false;
   Future<void> setUseLocalStorage(bool value) async {
     await _prefs!.setBool(_kUseLocalStorage, value);
     notifyListeners();

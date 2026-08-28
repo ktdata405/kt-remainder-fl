@@ -157,7 +157,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 _SwitchTile(
                   icon: Icons.storage_rounded,
-                  title: 'Use Local Storage',
+                  title: 'Save & Sync Data',
                   value: _settings.useLocalStorage,
                   onChanged: (v) async {
                     await _settings.setUseLocalStorage(v);
