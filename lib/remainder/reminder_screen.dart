@@ -28,7 +28,7 @@ class ReminderScreen extends StatefulWidget {
   State<ReminderScreen> createState() => _ReminderScreenState();
 }
 
-class _ReminderScreenState extends State<ReminderScreen> {
+class _ReminderScreenState extends State<ReminderScreen> with WidgetsBindingObserver {
   final ReminderService _service = ReminderService.instance;
   StreamSubscription<Reminder>? _webDueReminderSub;
   StreamSubscription<int>? _customSnoozeSub;
@@ -43,14 +43,30 @@ class _ReminderScreenState extends State<ReminderScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initialize();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _webDueReminderSub?.cancel();
     _customSnoozeSub?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkPendingSnooze();
+    }
+  }
+
+  Future<void> _checkPendingSnooze() async {
+    final id = await _service.consumePendingCustomSnoozeRequest();
+    if (id != null && mounted) {
+      _showSnoozePickerForId(id);
+    }
   }
 
   Future<void> _initialize() async {
@@ -74,10 +90,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
         }
 
         // Check for pending custom snooze from notification
-        final pendingSnoozeId = await _service.consumePendingCustomSnoozeRequest();
-        if (pendingSnoozeId != null) {
-          _showSnoozePickerForId(pendingSnoozeId);
-        }
+        await _checkPendingSnooze();
       }
       // The service already triggers a background sync in initialize()
       // We don't need to call _reload() here as it triggers another network fetch.

@@ -352,9 +352,9 @@ class ReminderService {
         importance: Importance.max, priority: Priority.high,
         groupKey: 'com.example.kt_remainder_fl.REMINDERS',
         actions: [
-          AndroidNotificationAction(_actionComplete, 'Complete', cancelNotification: true),
-          AndroidNotificationAction(_actionSnooze1h, 'Snooze 1h', cancelNotification: true),
-          AndroidNotificationAction(_actionSnoozeCustom, 'Snooze', cancelNotification: true),
+          AndroidNotificationAction(_actionComplete, 'Complete', cancelNotification: true, showsUserInterface: false),
+          AndroidNotificationAction(_actionSnooze1h, 'Snooze 1h', cancelNotification: true, showsUserInterface: false),
+          AndroidNotificationAction(_actionSnoozeCustom, 'Snooze', cancelNotification: true, showsUserInterface: true),
         ],
       );
       await _notifications.zonedSchedule(
@@ -384,12 +384,10 @@ class ReminderService {
 
       if (actionId == _actionSnooze1h) {
         await snoozeReminder(id, by: const Duration(hours: 1));
-        await _notifications.cancel(id).catchError((_) {});
         return;
       }
 
       if (actionId == _actionSnoozeCustom) {
-        await _notifications.cancel(id).catchError((_) {});
         final prefs = await SharedPreferences.getInstance();
         await prefs.setInt(_kPendingCustomSnoozeId, id);
         _customSnoozeRequestController.add(id);
@@ -398,7 +396,6 @@ class ReminderService {
 
       if (actionId == _actionComplete) {
         await completeReminder(id);
-        await _notifications.cancel(id).catchError((_) {});
         return;
       }
     } catch (e) {
