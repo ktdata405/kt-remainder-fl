@@ -240,8 +240,8 @@ jobs:
             <p><b>Run:</b> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Open workflow run</a></p>
             <p><b>Direct Download Links (ZIP):</b></p>
             <ul>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">Download Debug APK</a></li>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">Download Release APK</a></li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">Download Debug APK</a> (<a href="intent://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip#Intent;scheme=https;package=com.android.chrome;end">via Chrome</a>)</li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">Download Release APK</a> (<a href="intent://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip#Intent;scheme=https;package=com.android.chrome;end">via Chrome</a>)</li>
             </ul>
             <p>Download artifacts from this run:</p>
             <ul>
@@ -280,8 +280,8 @@ jobs:
             <p><b>Run:</b> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Open workflow run</a></p>
             <p><b>Direct Download Links (ZIP):</b></p>
             <ul>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">Download Debug APK</a></li>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">Download Release APK</a></li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">Download Debug APK</a> (<a href="intent://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip#Intent;scheme=https;package=com.android.chrome;end">via Chrome</a>)</li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">Download Release APK</a> (<a href="intent://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip#Intent;scheme=https;package=com.android.chrome;end">via Chrome</a>)</li>
             </ul>
             <p>Download artifacts from this run:</p>
             <ul>
