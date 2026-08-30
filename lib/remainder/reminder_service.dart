@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'dart:ui';
 
 import '../config/app_config.dart';
 import '../services/database_service.dart';
@@ -21,6 +22,7 @@ const String _kPendingCustomSnoozeId = 'pending_custom_snooze_id';
 
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse response) {
+  DartPluginRegistrant.ensureInitialized();
   ReminderService.instance.handleNotificationAction(response);
 }
 
@@ -38,6 +40,7 @@ class ReminderService {
   final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
   final StreamController<Reminder> _webDueReminderController = StreamController<Reminder>.broadcast();
   final StreamController<int> _customSnoozeRequestController = StreamController<int>.broadcast();
+  final StreamController<void> _reminderUpdatesController = StreamController<void>.broadcast();
 
   String _webAppUrl = '';
   bool _isInitialized = false;
@@ -47,6 +50,7 @@ class ReminderService {
 
   Stream<Reminder> get webDueReminderStream => _webDueReminderController.stream;
   Stream<int> get customSnoozeRequestStream => _customSnoozeRequestController.stream;
+  Stream<void> get reminderUpdatesStream => _reminderUpdatesController.stream;
 
   void reset() {
     _isInitialized = false;
@@ -105,6 +109,8 @@ class ReminderService {
     _cachedReminders.removeWhere((r) => r.id == active.id);
     _cachedReminders.add(active);
 
+    _reminderUpdatesController.add(null);
+
     // Background sync
     _upsertRemote(active).catchError((e) => debugPrint('Sync failed: $e'));
   }
@@ -112,7 +118,10 @@ class ReminderService {
   Future<void> completeReminder(int id) async {
     _assertInitialized();
     final source = await _findReminderById(id);
-    if (source == null) throw StateError('Reminder not found: $id');
+    if (source == null) {
+      debugPrint('Reminder not found: $id');
+      return;
+    }
     final updated = source.advancedForCompletion();
     
     if (!updated.isActive) {
@@ -129,13 +138,18 @@ class ReminderService {
     _cachedReminders.removeWhere((r) => r.id == updated.id);
     _cachedReminders.add(updated);
 
+    _reminderUpdatesController.add(null);
+
     _upsertRemote(updated).catchError((e) => debugPrint('Sync failed: $e'));
   }
 
   Future<void> snoozeReminder(int id, {Duration by = const Duration(minutes: 10)}) async {
     _assertInitialized();
     final source = await _findReminderById(id);
-    if (source == null) throw StateError('Reminder not found: $id');
+    if (source == null) {
+      debugPrint('Reminder not found: $id');
+      return;
+    }
     final snoozed = Reminder(
       id: source.id,
       title: source.title,
@@ -156,6 +170,8 @@ class ReminderService {
     // Update cache
     _cachedReminders.removeWhere((r) => r.id == snoozed.id);
     _cachedReminders.add(snoozed);
+
+    _reminderUpdatesController.add(null);
 
     _upsertRemote(snoozed).catchError((e) => debugPrint('Sync failed: $e'));
   }
@@ -211,6 +227,7 @@ class ReminderService {
       await DatabaseService.instance.deleteReminder(id);
     }
     _cachedReminders.removeWhere((r) => r.id == id);
+    _reminderUpdatesController.add(null);
     _cancelRemoteById(id).catchError((e) => debugPrint('Sync failed: $e'));
   }
 
@@ -370,6 +387,7 @@ class ReminderService {
 
   Future<void> handleNotificationAction(NotificationResponse resp) async {
     final actionId = resp.actionId;
+    debugPrint('Notification action received: $actionId');
     try {
       final payloadData = jsonDecode(resp.payload ?? '{}') as Map<String, dynamic>;
       final id = payloadData['id'] as int?;
@@ -377,8 +395,8 @@ class ReminderService {
 
       // Ensure service is initialized for background actions
       if (!_isInitialized) {
-        final prefs = await SharedPreferences.getInstance();
-        final url = prefs.getString('web_app_url') ?? kWebAppUrl;
+        await SettingsService.instance.init(seedUrl: kWebAppUrl);
+        final url = SettingsService.instance.webAppUrl;
         await initialize(webAppUrl: url);
       }
 
@@ -395,11 +413,18 @@ class ReminderService {
       }
 
       if (actionId == _actionComplete) {
+        debugPrint('Processing Complete action for ID: $id');
         await completeReminder(id);
         return;
       }
+      
+      // If actionId is null, it means the notification body was tapped
+      if (actionId == null) {
+        debugPrint('Notification body tapped for ID: $id');
+        // Do nothing special, app will open due to default behavior
+      }
     } catch (e) {
-      debugPrint('Notification failed: $e');
+      debugPrint('Notification action handling failed: $e');
     }
   }
 

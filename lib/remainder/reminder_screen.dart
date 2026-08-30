@@ -32,6 +32,7 @@ class _ReminderScreenState extends State<ReminderScreen> with WidgetsBindingObse
   final ReminderService _service = ReminderService.instance;
   StreamSubscription<Reminder>? _webDueReminderSub;
   StreamSubscription<int>? _customSnoozeSub;
+  StreamSubscription<void>? _updatesSub;
   final Set<int> _busyReminderIds = <int>{};
   bool _isInitializing = true;
   bool _isReloading = false;
@@ -52,6 +53,7 @@ class _ReminderScreenState extends State<ReminderScreen> with WidgetsBindingObse
     WidgetsBinding.instance.removeObserver(this);
     _webDueReminderSub?.cancel();
     _customSnoozeSub?.cancel();
+    _updatesSub?.cancel();
     super.dispose();
   }
 
@@ -75,6 +77,7 @@ class _ReminderScreenState extends State<ReminderScreen> with WidgetsBindingObse
       await _service.initialize(webAppUrl: widget.webAppUrl);
       _attachWebDueReminderListener();
       _attachCustomSnoozeListener();
+      _attachUpdatesListener();
       if (mounted) {
         setState(() => _isServiceReady = true);
         
@@ -116,7 +119,15 @@ class _ReminderScreenState extends State<ReminderScreen> with WidgetsBindingObse
     });
   }
 
-  Future<void> _reload() async {
+  void _attachUpdatesListener() {
+    if (_updatesSub != null) return;
+    _updatesSub = _service.reminderUpdatesStream.listen((_) {
+      if (!mounted) return;
+      _reload(backgroundSync: false); // Reload local UI only
+    });
+  }
+
+  Future<void> _reload({bool backgroundSync = true}) async {
     if (!_isServiceReady) return;
     if (mounted) setState(() { _isReloading = true; _fetchError = null; });
     try {
@@ -124,14 +135,14 @@ class _ReminderScreenState extends State<ReminderScreen> with WidgetsBindingObse
       final localList = await _service.getLocalReminders();
       if (mounted) setState(() => _reminders = localList);
 
-      // Then, trigger a background sync to keep data fresh from remote
-      // This ensures that even after a local action, the UI is consistent
-      // and we pick up any changes from the remote sheet eventually.
-      await _service.rescheduleActiveRemindersFromSheet();
-      
-      if (mounted) {
-        final updatedLocal = await _service.getLocalReminders();
-        setState(() => _reminders = updatedLocal);
+      if (backgroundSync) {
+        // Then, trigger a background sync to keep data fresh from remote
+        await _service.rescheduleActiveRemindersFromSheet();
+        
+        if (mounted) {
+          final updatedLocal = await _service.getLocalReminders();
+          setState(() => _reminders = updatedLocal);
+        }
       }
     } catch (e) {
       if (mounted) setState(() => _fetchError = e.toString());

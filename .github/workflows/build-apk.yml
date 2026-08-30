@@ -224,7 +224,7 @@ jobs:
           secure: ${{ env.SMTP_SECURE }}
           username: ${{ env.MAIL_USERNAME }}
           password: ${{ env.MAIL_PASSWORD }}
-          subject: "[Reminder App] APK (#${{ github.run_number }}) - with attachments"
+          subject: "Reminder App - APK (#${{ github.run_number }}) - with attachments"
           to: ${{ env.MAIL_TO }}
           from: ${{ env.MAIL_USERNAME }}
           attachments: |
@@ -260,7 +260,7 @@ jobs:
           secure: ${{ env.SMTP_SECURE }}
           username: ${{ env.MAIL_USERNAME }}
           password: ${{ env.MAIL_PASSWORD }}
-          subject: "[Reminder App] APK (#${{ github.run_number }})"
+          subject: "Reminder App - APK (#${{ github.run_number }})"
           to: ${{ env.MAIL_TO }}
           from: ${{ env.MAIL_USERNAME }}
           html_body: |
