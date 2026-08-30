@@ -235,6 +235,8 @@ jobs:
             <p><b>Delivery mode:</b> APK files attached to this email.</p>
             <p><b>Repository:</b> ${{ github.repository }}</p>
             <p><b>Branch:</b> ${{ github.ref_name }}</p>
+            <p><b>Release Notes:</b><br/>
+            <pre>${{ github.event.head_commit.message }}</pre></p>
             <p><b>Run:</b> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Open workflow run</a></p>
             <p><b>Direct Download Links (ZIP):</b></p>
             <ul>
@@ -273,6 +275,8 @@ jobs:
             <p><b>Delivery mode:</b> links only (${{ steps.mail_attachment_mode.outputs.reason }}).</p>
             <p><b>Repository:</b> ${{ github.repository }}</p>
             <p><b>Branch:</b> ${{ github.ref_name }}</p>
+            <p><b>Release Notes:</b><br/>
+            <pre>${{ github.event.head_commit.message }}</pre></p>
             <p><b>Run:</b> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Open workflow run</a></p>
             <p><b>Direct Download Links (ZIP):</b></p>
             <ul>
