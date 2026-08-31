@@ -61,7 +61,7 @@ class ReminderService {
     _cachedReminders.clear();
   }
 
-  Future<void> initialize({required String webAppUrl}) async {
+  Future<void> initialize({required String webAppUrl, bool awaitInitialSync = false}) async {
     if (_isInitialized) return;
     _webAppUrl = webAppUrl.trim();
     await _configureLocalTimezone();
@@ -81,9 +81,18 @@ class ReminderService {
       } catch (_) {}
     }
     _isInitialized = true;
-    rescheduleActiveRemindersFromSheet().catchError((e) {
-      debugPrint('rescheduleActiveRemindersFromSheet skipped: $e');
-    });
+    if (awaitInitialSync) {
+      try {
+        // Used by background actions that need reminder lookup immediately.
+        await rescheduleActiveRemindersFromSheet();
+      } catch (e) {
+        debugPrint('rescheduleActiveRemindersFromSheet skipped: $e');
+      }
+    } else {
+      rescheduleActiveRemindersFromSheet().catchError((e) {
+        debugPrint('rescheduleActiveRemindersFromSheet skipped: $e');
+      });
+    }
   }
 
   Future<void> scheduleReminder(Reminder reminder) async {
@@ -115,9 +124,9 @@ class ReminderService {
     _upsertRemote(active).catchError((e) => debugPrint('Sync failed: $e'));
   }
 
-  Future<void> completeReminder(int id) async {
+  Future<void> completeReminder(int id, {Reminder? fallbackReminder}) async {
     _assertInitialized();
-    final source = await _findReminderById(id);
+    final source = await _findReminderById(id, fallbackReminder: fallbackReminder);
     if (source == null) {
       debugPrint('Reminder not found: $id');
       return;
@@ -143,9 +152,13 @@ class ReminderService {
     _upsertRemote(updated).catchError((e) => debugPrint('Sync failed: $e'));
   }
 
-  Future<void> snoozeReminder(int id, {Duration by = const Duration(minutes: 10)}) async {
+  Future<void> snoozeReminder(
+    int id, {
+    Duration by = const Duration(minutes: 10),
+    Reminder? fallbackReminder,
+  }) async {
     _assertInitialized();
-    final source = await _findReminderById(id);
+    final source = await _findReminderById(id, fallbackReminder: fallbackReminder);
     if (source == null) {
       debugPrint('Reminder not found: $id');
       return;
@@ -318,19 +331,47 @@ class ReminderService {
     if (response.statusCode != 200) throw StateError('Upsert failed: ${response.body}');
   }
 
-  Future<Reminder?> _findReminderById(int id) async {
+  Future<Reminder?> _findReminderById(int id, {Reminder? fallbackReminder}) async {
     if (SettingsService.instance.useLocalStorage) {
       final local = await DatabaseService.instance.getReminderById(id);
       if (local != null) return local;
     }
+
+    if (fallbackReminder != null && fallbackReminder.id == id) {
+      return fallbackReminder;
+    }
+
     // Try cache if local DB is off or item not found locally
     try {
       return _cachedReminders.firstWhere((r) => r.id == id);
     } catch (_) {
-      // If not in cache, we might need to fetch from sheet, 
-      // but usually the cache should be up to date if we just showed it in the UI.
+      // Background actions can arrive before cache is hydrated in this isolate.
+      try {
+        final remoteReminders = await fetchRemindersFromSheet();
+        for (final reminder in remoteReminders) {
+          if (reminder.id == id) return reminder;
+        }
+        return null;
+      } catch (e) {
+        debugPrint('Reminder lookup remote fallback failed for $id: $e');
+        return null;
+      }
+    }
+  }
+
+  Reminder? _reminderFromPayload(Map<String, dynamic> payloadData) {
+    try {
+      return Reminder.fromMap(payloadData);
+    } catch (_) {
       return null;
     }
+  }
+
+  int? _parseReminderId(Map<String, dynamic> payloadData, NotificationResponse resp) {
+    final dynamic payloadId = payloadData['id'];
+    if (payloadId is int) return payloadId;
+    if (payloadId is String) return int.tryParse(payloadId);
+    return resp.id;
   }
 
   Future<void> _applySnooze(Reminder source, DateTime when) async {
@@ -345,8 +386,16 @@ class ReminderService {
       customInterval: source.customInterval,
       customUnit: source.customUnit,
     );
-    await _upsertRemote(target);
+    if (SettingsService.instance.useLocalStorage) {
+      await DatabaseService.instance.updateReminder(target);
+    }
     await _scheduleNotification(target);
+
+    _cachedReminders.removeWhere((r) => r.id == target.id);
+    _cachedReminders.add(target);
+    _reminderUpdatesController.add(null);
+
+    _upsertRemote(target).catchError((e) => debugPrint('Sync failed: $e'));
   }
 
   Reminder? _mapToReminder(Map<String, dynamic> row) {
@@ -389,19 +438,28 @@ class ReminderService {
     final actionId = resp.actionId;
     debugPrint('Notification action received: $actionId');
     try {
-      final payloadData = jsonDecode(resp.payload ?? '{}') as Map<String, dynamic>;
-      final id = payloadData['id'] as int?;
+      final payloadData = (jsonDecode(resp.payload ?? '{}') as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+      final id = _parseReminderId(payloadData, resp);
       if (id == null) return;
+      final payloadReminder = _reminderFromPayload(payloadData);
 
       // Ensure service is initialized for background actions
       if (!_isInitialized) {
         await SettingsService.instance.init(seedUrl: kWebAppUrl);
         final url = SettingsService.instance.webAppUrl;
-        await initialize(webAppUrl: url);
+        if (url.isEmpty) {
+          debugPrint('Notification action ignored: missing configured Web App URL');
+          return;
+        }
+        await initialize(webAppUrl: url, awaitInitialSync: true);
       }
 
       if (actionId == _actionSnooze1h) {
-        await snoozeReminder(id, by: const Duration(hours: 1));
+        await snoozeReminder(
+          id,
+          by: const Duration(hours: 1),
+          fallbackReminder: payloadReminder,
+        );
         return;
       }
 
@@ -414,7 +472,7 @@ class ReminderService {
 
       if (actionId == _actionComplete) {
         debugPrint('Processing Complete action for ID: $id');
-        await completeReminder(id);
+        await completeReminder(id, fallbackReminder: payloadReminder);
         return;
       }
       
