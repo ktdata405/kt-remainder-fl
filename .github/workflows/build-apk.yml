@@ -88,7 +88,7 @@ jobs:
         run: |
           set -o pipefail
           java -version
-          if ! flutter build apk --debug --verbose 2>&1 | tee build-debug.log; then
+          if ! flutter build apk --debug --build-name="1.0.${{ github.run_number }}" --build-number=${{ github.run_number }} --verbose 2>&1 | tee build-debug.log; then
             echo "::group::First FAILURE block (debug)"
             awk '/FAILURE: Build failed with an exception\./,0' build-debug.log > build-debug-failure.log || true
             if [ -s build-debug-failure.log ]; then
@@ -104,7 +104,7 @@ jobs:
         run: |
           set -o pipefail
           java -version
-          if ! flutter build apk --release --verbose 2>&1 | tee build-release.log; then
+          if ! flutter build apk --release --build-name="1.0.${{ github.run_number }}" --build-number=${{ github.run_number }} --verbose 2>&1 | tee build-release.log; then
             echo "::group::First FAILURE block (release)"
             awk '/FAILURE: Build failed with an exception\./,0' build-release.log > build-release-failure.log || true
             if [ -s build-release-failure.log ]; then
@@ -141,6 +141,19 @@ jobs:
           name: app-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+      - name: Build Summary
+        if: always()
+        run: |
+          echo "### APK Build Results 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact | Download Link |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
+          echo "| Debug APK | [Download ZIP](https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release APK | [Download ZIP](https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "To force open in Chrome (Android):" >> $GITHUB_STEP_SUMMARY
+          echo "- [Debug APK (via Chrome)](googlechrome://navigate?url=https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Release APK (via Chrome)](googlechrome://navigate?url=https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip)" >> $GITHUB_STEP_SUMMARY
 
       - name: Decide email attachment mode
         id: mail_attachment_mode
@@ -240,8 +253,8 @@ jobs:
             <p><b>Run:</b> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Open workflow run</a></p>
             <p><b>Direct Download Links (ZIP):</b></p>
             <ul>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">Download Debug APK</a> (<a href="intent://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip#Intent;scheme=https;package=com.android.chrome;end">via Chrome</a>)</li>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">Download Release APK</a> (<a href="intent://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip#Intent;scheme=https;package=com.android.chrome;end">via Chrome</a>)</li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">Download Debug APK</a> (<a href="googlechrome://navigate?url=https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">via Chrome</a>)</li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">Download Release APK</a> (<a href="googlechrome://navigate?url=https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">via Chrome</a>)</li>
             </ul>
             <p>Download artifacts from this run:</p>
             <ul>
@@ -280,8 +293,8 @@ jobs:
             <p><b>Run:</b> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Open workflow run</a></p>
             <p><b>Direct Download Links (ZIP):</b></p>
             <ul>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">Download Debug APK</a> (<a href="intent://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip#Intent;scheme=https;package=com.android.chrome;end">via Chrome</a>)</li>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">Download Release APK</a> (<a href="intent://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip#Intent;scheme=https;package=com.android.chrome;end">via Chrome</a>)</li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">Download Debug APK</a> (<a href="googlechrome://navigate?url=https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">via Chrome</a>)</li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">Download Release APK</a> (<a href="googlechrome://navigate?url=https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">via Chrome</a>)</li>
             </ul>
             <p>Download artifacts from this run:</p>
             <ul>

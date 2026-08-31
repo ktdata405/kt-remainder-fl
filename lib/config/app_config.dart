@@ -7,3 +7,8 @@
 // Paste your Apps Script Web App URL here.
 // Get it from: Google Sheet → Extensions → Apps Script → Deploy → New deployment
 const String kWebAppUrl = 'https://script.google.com/macros/s/AKfycbyZtz0orkaDPjbhANKsohgPFDxFT-cw6B3unkYiSy4NkPk6OGBFss8qhsbHhRz7EXxj/exec';
+
+// Repository and Download links
+const String kRepoUrl = 'https://github.com/ktdata405/kt-remainder-fl';
+const String kNightlyDebug = 'https://nightly.link/ktdata405/kt-remainder-fl/workflows/build-apk/main/app-debug-apk.zip';
+const String kNightlyRelease = 'https://nightly.link/ktdata405/kt-remainder-fl/workflows/build-apk/main/app-release-apk.zip';

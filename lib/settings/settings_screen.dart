@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'dart:io' show Platform;
 
+import '../config/app_config.dart';
 import '../remainder/reminder_model.dart';
 import '../services/settings_service.dart';
-
-// Simulating auto-incrementing version
-const String kAppVersion = "1.0.4"; // Incremented manually for this 'commit'
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, required this.onSettingsChanged});
@@ -198,15 +199,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const _SectionHeader(label: 'About', icon: Icons.info_outline, color: Colors.grey),
           _Group(
             backgroundColor: sectionBg,
-            child: const Column(
+            child: Column(
               children: [
-                ListTile(
-                  leading: Icon(Icons.info_outline),
-                  title: Text('App Version', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                  trailing: Text(kAppVersion, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
+                FutureBuilder<PackageInfo>(
+                  future: PackageInfo.fromPlatform(),
+                  builder: (context, snapshot) {
+                    final version = snapshot.hasData 
+                        ? "${snapshot.data!.version}+${snapshot.data!.buildNumber}" 
+                        : "Loading...";
+                    return ListTile(
+                      leading: const Icon(Icons.info_outline),
+                      title: const Text('App Version', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                      trailing: Text(version, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
+                    );
+                  }
+                ),
+                const Divider(height: 1),
+                const _LinkTile(
+                  title: 'Google Sheet Sync',
+                  subtitle: 'Open the source Google Sheet',
+                  icon: Icons.table_chart_outlined,
+                  url: _settings.webAppUrl,
+                ),
+                const Divider(height: 1),
+                const _LinkTile(
+                  title: 'Project Repository',
+                  subtitle: 'View source code on GitHub',
+                  icon: Icons.code_rounded,
+                  url: kRepoUrl,
+                ),
+                const Divider(height: 1),
+                const _LinkTile(
+                  title: 'Download Debug APK',
+                  subtitle: 'Latest nightly debug build (ZIP)',
+                  icon: Icons.bug_report_outlined,
+                  url: kNightlyDebug,
+                ),
+                const Divider(height: 1),
+                const _LinkTile(
+                  title: 'Download Release APK',
+                  subtitle: 'Latest nightly release build (ZIP)',
+                  icon: Icons.rocket_launch_outlined,
+                  url: kNightlyRelease,
                 ),
                 Padding(
-                  padding: EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(16),
                   child: Text(
                     'Version updates automatically with each production build.',
                     style: TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
@@ -413,4 +450,62 @@ class _DropdownTile<T> extends StatelessWidget {
 
 extension StringExtension on String {
   String capitalize() => "${this[0].toUpperCase()}${substring(1).toLowerCase()}";
+}
+
+class _LinkTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final String url;
+
+  const _LinkTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.url,
+  });
+
+  Future<void> _launch(BuildContext context, {bool forceChrome = false}) async {
+    if (url.isEmpty) return;
+    
+    try {
+      Uri uri = Uri.parse(url);
+      
+      // If forcing Chrome on Android
+      if (forceChrome && Platform.isAndroid) {
+        // Option 1: Using intent scheme directly
+        // intent://...#Intent;scheme=https;package=com.android.chrome;end
+        final intentUrl = 'intent://${uri.host}${uri.path}${uri.hasQuery ? '?${uri.query}' : ''}#Intent;scheme=${uri.scheme};package=com.android.chrome;end';
+        uri = Uri.parse(intentUrl);
+      }
+
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not launch browser')),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, size: 20),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+      trailing: const Icon(Icons.open_in_new_rounded, size: 16, color: Colors.grey),
+      onTap: () => _launch(context),
+      onLongPress: () => _launch(context, forceChrome: true),
+    );
+  }
 }
