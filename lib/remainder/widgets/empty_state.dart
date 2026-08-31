@@ -14,7 +14,7 @@ class EmptyState extends StatelessWidget {
           Container(
             width: 120, height: 120,
             decoration: BoxDecoration(
-              color: Colors.grey.withValues(alpha: 0.05),
+              color: Colors.grey.withOpacity(0.05),
               borderRadius: BorderRadius.circular(28),
             ),
             padding: const EdgeInsets.all(20),
@@ -63,7 +63,7 @@ class _EmptyIconRow extends StatelessWidget {
           child: Container(
             height: 3, 
             decoration: BoxDecoration(
-              color: Colors.grey.withValues(alpha: 0.25), 
+              color: Colors.grey.withOpacity(0.25), 
               borderRadius: BorderRadius.circular(2),
             ),
           ),

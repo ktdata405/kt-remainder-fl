@@ -72,7 +72,7 @@ class _AddReminderSheetState extends State<AddReminderSheet> {
                   width: 40, 
                   height: 4, 
                   decoration: BoxDecoration(
-                    color: cs.onSurface.withValues(alpha: 0.1), 
+                    color: cs.onSurface.withOpacity(0.1), 
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -108,14 +108,15 @@ class _AddReminderSheetState extends State<AddReminderSheet> {
                     firstDate: DateTime.now(), 
                     lastDate: DateTime(2100),
                   );
-                  if (d == null || !mounted) return;
+                  if (d == null) return;
+                  if (!context.mounted) return;
                   final t = await showTimePicker(
                     context: context, 
                     initialTime: TimeOfDay.fromDateTime(_selectedDateTime ?? DateTime.now()),
                   );
-                  if (t != null) {
-                    setState(() => _selectedDateTime = DateTime(d.year, d.month, d.day, t.hour, t.minute));
-                  }
+                  if (t == null) return;
+                  if (!mounted) return;
+                  setState(() => _selectedDateTime = DateTime(d.year, d.month, d.day, t.hour, t.minute));
                 },
               ),
               const SizedBox(height: 16),
@@ -195,9 +196,9 @@ class _AddReminderSheetState extends State<AddReminderSheet> {
       child: Container(
         padding: const EdgeInsets.all(16), 
         decoration: BoxDecoration(
-          color: cs.primary.withValues(alpha: 0.05), 
+          color: cs.primary.withOpacity(0.05), 
           borderRadius: BorderRadius.circular(16), 
-          border: Border.all(color: cs.primary.withValues(alpha: 0.1)),
+          border: Border.all(color: cs.primary.withOpacity(0.1)),
         ), 
         child: Row(
           children: [
@@ -210,7 +211,7 @@ class _AddReminderSheetState extends State<AddReminderSheet> {
                   label, 
                   style: TextStyle(
                     fontSize: 10, 
-                    color: cs.primary.withValues(alpha: 0.7), 
+                    color: cs.primary.withOpacity(0.7), 
                     fontWeight: FontWeight.w800,
                   ),
                 ), 
@@ -227,8 +228,8 @@ class _AddReminderSheetState extends State<AddReminderSheet> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4), 
       decoration: BoxDecoration(
-        color: Colors.grey.withValues(alpha: 0.05), 
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)), 
+        color: Colors.grey.withOpacity(0.05), 
+        border: Border.all(color: Colors.grey.withOpacity(0.1)), 
         borderRadius: BorderRadius.circular(16),
       ), 
       child: DropdownButtonHideUnderline(

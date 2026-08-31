@@ -158,7 +158,7 @@ class _ListViewContainerState extends State<ListViewContainer> {
               Text(
                 '$count tasks', 
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: cs.onSurface.withValues(alpha: 0.5),
+                  color: cs.onSurface.withOpacity(0.5),
                 ),
               ),
             ],
@@ -201,7 +201,7 @@ class _ListViewContainerState extends State<ListViewContainer> {
         color: cs.surface, 
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05), 
+            color: Colors.black.withOpacity(0.05), 
             blurRadius: 20, 
             offset: const Offset(0, -5),
           ),
@@ -214,7 +214,7 @@ class _ListViewContainerState extends State<ListViewContainer> {
           color: isDark ? const Color(0xFF1E293B) : Colors.white, 
           borderRadius: BorderRadius.circular(36), 
           border: Border.all(
-            color: isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE2E8F0),
+            color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFE2E8F0),
           ),
         ),
         child: Row(
@@ -246,7 +246,7 @@ class _ListViewContainerState extends State<ListViewContainer> {
             shape: BoxShape.circle, 
             boxShadow: [
               BoxShadow(
-                color: cs.primary.withValues(alpha: 0.3), 
+                color: cs.primary.withOpacity(0.3), 
                 blurRadius: 12, 
                 offset: const Offset(0, 4),
               ),
@@ -276,7 +276,7 @@ class _ListViewContainerState extends State<ListViewContainer> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), 
         child: Icon(
           icon, 
-          color: isSelected ? cs.primary : cs.onSurface.withValues(alpha: 0.35), 
+          color: isSelected ? cs.primary : cs.onSurface.withOpacity(0.35), 
           size: 26,
         ),
       ),

@@ -32,10 +32,10 @@ class ReminderCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE2E8F0)),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
+            color: Colors.black.withOpacity(0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -78,10 +78,10 @@ class ReminderCard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: isOverdue ? Colors.red.withValues(alpha: 0.1) : cs.primary.withValues(alpha: 0.05),
+                          color: isOverdue ? Colors.red.withOpacity(0.1) : cs.primary.withOpacity(0.05),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: isOverdue ? Colors.red.withValues(alpha: 0.2) : cs.primary.withValues(alpha: 0.1),
+                            color: isOverdue ? Colors.red.withOpacity(0.2) : cs.primary.withOpacity(0.1),
                           ),
                         ),
                         child: Row(
@@ -108,7 +108,7 @@ class ReminderCard extends StatelessWidget {
                       Row(
                         children: [
                           if (reminder.repeatFrequency != RepeatFrequency.none) ...[
-                            Icon(_repeatIcon(reminder.repeatFrequency), size: 10, color: cs.primary.withValues(alpha: 0.7)),
+                            Icon(_repeatIcon(reminder.repeatFrequency), size: 10, color: cs.primary.withOpacity(0.7)),
                             const SizedBox(width: 4),
                             Text(_repeatLabel(reminder), style: theme.textTheme.bodySmall?.copyWith(fontSize: 9, fontWeight: FontWeight.w700)),
                             const SizedBox(width: 8),
@@ -116,7 +116,7 @@ class ReminderCard extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: priorityColor.withValues(alpha: 0.1), 
+                              color: priorityColor.withOpacity(0.1), 
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -133,7 +133,7 @@ class ReminderCard extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: Colors.red.withValues(alpha: 0.1), 
+                                color: Colors.red.withOpacity(0.1), 
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: const Text(

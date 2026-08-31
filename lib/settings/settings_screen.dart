@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:io' show Platform;
@@ -215,7 +216,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   }
                 ),
                 const Divider(height: 1),
-                const _LinkTile(
+                _LinkTile(
                   title: 'Google Sheet Sync',
                   subtitle: 'Open the source Google Sheet',
                   icon: Icons.table_chart_outlined,
@@ -242,8 +243,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.rocket_launch_outlined,
                   url: kNightlyRelease,
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
+                const Padding(
+                  padding: EdgeInsets.all(16),
                   child: Text(
                     'Version updates automatically with each production build.',
                     style: TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
@@ -398,7 +399,7 @@ class _Group extends StatelessWidget {
       decoration: BoxDecoration(
         color: backgroundColor, 
         borderRadius: BorderRadius.circular(20), 
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.1))
+        border: Border.all(color: Colors.grey.withOpacity(0.1))
       ), 
       child: ClipRRect(borderRadius: BorderRadius.circular(20), child: child)
     );
@@ -472,7 +473,7 @@ class _LinkTile extends StatelessWidget {
       Uri uri = Uri.parse(url);
       
       // If forcing Chrome on Android
-      if (forceChrome && Platform.isAndroid) {
+      if (forceChrome && !kIsWeb && Platform.isAndroid) {
         // Option 1: Using intent scheme directly
         // intent://...#Intent;scheme=https;package=com.android.chrome;end
         final intentUrl = 'intent://${uri.host}${uri.path}${uri.hasQuery ? '?${uri.query}' : ''}#Intent;scheme=${uri.scheme};package=com.android.chrome;end';
