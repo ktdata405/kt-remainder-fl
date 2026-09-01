@@ -13,7 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SHEET_NAME = 'Reminders';
-const HEADERS = ['id', 'title', 'body', 'scheduledTime', 'repeatFrequency', 'isActive', 'priority', 'customInterval', 'customUnit'];
+const HEADERS = ['id', 'title', 'body', 'scheduledTime', 'repeatFrequency', 'isActive', 'priority', 'lastCompleted', 'customInterval', 'customUnit'];
 
 function getSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -85,8 +85,9 @@ function fetchReminders() {
         const freq = get('repeatfrequency', 4);
         const activeRaw = get('isactive', 5);
         const priority = get('priority', 6) || 'medium';
-        const customInterval = get('custominterval', 7);
-        const customUnit = get('customunit', 8);
+        const lastCompletedRaw = get('lastcompleted', 7);
+        const customInterval = get('custominterval', 8);
+        const customUnit = get('customunit', 9);
 
         if (!id || !rawTime) return null;
 
@@ -97,6 +98,15 @@ function fetchReminders() {
           scheduledTime = String(rawTime);
         }
 
+        let lastCompleted = null;
+        if (lastCompletedRaw) {
+          if (lastCompletedRaw instanceof Date) {
+            lastCompleted = lastCompletedRaw.toISOString();
+          } else {
+            lastCompleted = String(lastCompletedRaw);
+          }
+        }
+
         return {
           id: Number(id),
           title: title,
@@ -105,6 +115,7 @@ function fetchReminders() {
           repeatFrequency: freq ? String(freq) : 'none',
           isActive: String(activeRaw).toLowerCase() === 'true' || activeRaw === true,
           priority: String(priority),
+          lastCompleted: lastCompleted,
           customInterval: customInterval !== '' ? Number(customInterval) : null,
           customUnit: customUnit !== '' ? String(customUnit) : null
         };
@@ -136,6 +147,7 @@ function upsertReminder(reminder) {
     reminder.repeatFrequency || 'none',
     reminder.isActive.toString(),
     reminder.priority || 'medium',
+    reminder.lastCompleted || '',
     reminder.customInterval || '',
     reminder.customUnit || ''
   ]]);

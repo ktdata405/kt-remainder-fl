@@ -14,6 +14,7 @@ class Reminder {
   final RepeatFrequency repeatFrequency;
   final bool isActive;
   final ReminderPriority priority;
+  final DateTime? lastCompleted;
   
   // Custom repeat fields
   final int? customInterval; // e.g., 3
@@ -27,6 +28,7 @@ class Reminder {
     this.repeatFrequency = RepeatFrequency.none,
     this.isActive = true,
     this.priority = ReminderPriority.medium,
+    this.lastCompleted,
     this.customInterval,
     this.customUnit,
   });
@@ -40,6 +42,7 @@ class Reminder {
       'repeatFrequency': repeatFrequency.name,
       'isActive': isActive,
       'priority': priority.name,
+      'lastCompleted': lastCompleted?.toIso8601String(),
       'customInterval': customInterval,
       'customUnit': customUnit,
     };
@@ -52,6 +55,7 @@ class Reminder {
     final repeatRaw = (map['repeatFrequency'] ?? 'none').toString().toLowerCase();
     final priorityRaw = (map['priority'] ?? 'medium').toString().toLowerCase();
     final activeRaw = map['isActive'];
+    final lastCompletedRaw = map['lastCompleted'] ?? map['completedAt'];
 
     return Reminder(
       id: id,
@@ -67,6 +71,7 @@ class Reminder {
         (value) => value.name.toLowerCase() == priorityRaw,
         orElse: () => ReminderPriority.medium,
       ),
+      lastCompleted: lastCompletedRaw != null ? DateTime.parse(lastCompletedRaw.toString()) : null,
       customInterval: map['customInterval'] != null ? int.tryParse(map['customInterval'].toString()) : null,
       customUnit: map['customUnit']?.toString(),
     );
@@ -83,6 +88,7 @@ class Reminder {
         repeatFrequency: repeatFrequency,
         isActive: false,
         priority: priority,
+        lastCompleted: DateTime.now(),
         customInterval: customInterval,
         customUnit: customUnit,
       );
@@ -99,6 +105,7 @@ class Reminder {
       repeatFrequency: repeatFrequency,
       isActive: true,
       priority: priority,
+      lastCompleted: DateTime.now(),
       customInterval: customInterval,
       customUnit: customUnit,
     );
@@ -170,6 +177,7 @@ class Reminder {
           repeatFrequency == other.repeatFrequency &&
           isActive == other.isActive &&
           priority == other.priority &&
+          lastCompleted == other.lastCompleted &&
           customInterval == other.customInterval &&
           customUnit == other.customUnit;
 
@@ -182,6 +190,7 @@ class Reminder {
       repeatFrequency.hashCode ^
       isActive.hashCode ^
       priority.hashCode ^
+      lastCompleted.hashCode ^
       customInterval.hashCode ^
       customUnit.hashCode;
 }

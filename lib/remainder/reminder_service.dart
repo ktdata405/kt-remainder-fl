@@ -118,10 +118,10 @@ class ReminderService {
     _cachedReminders.removeWhere((r) => r.id == active.id);
     _cachedReminders.add(active);
 
+    // Await sync to prevent race with UI reload/fetch
+    await _upsertRemote(active).catchError((e) => debugPrint('Sync failed: $e'));
+    
     _reminderUpdatesController.add(null);
-
-    // Background sync
-    _upsertRemote(active).catchError((e) => debugPrint('Sync failed: $e'));
   }
 
   Future<void> completeReminder(int id, {Reminder? fallbackReminder}) async {
@@ -134,7 +134,19 @@ class ReminderService {
     final updated = source.advancedForCompletion();
     
     if (!updated.isActive) {
-      await cancelReminder(id);
+      // Don't delete, just mark as inactive to show in "Completed" sections
+      if (!kIsWeb) await _notifications.cancel(id).catchError((_) {});
+      if (SettingsService.instance.useLocalStorage) {
+        await DatabaseService.instance.updateReminder(updated);
+      }
+      
+      _cachedReminders.removeWhere((r) => r.id == updated.id);
+      _cachedReminders.add(updated);
+      
+      // Await sync to prevent race with UI reload
+      await _upsertRemote(updated).catchError((e) => debugPrint('Sync failed: $e'));
+      
+      _reminderUpdatesController.add(null);
       return;
     }
     
@@ -147,9 +159,10 @@ class ReminderService {
     _cachedReminders.removeWhere((r) => r.id == updated.id);
     _cachedReminders.add(updated);
 
+    // Await sync to prevent race with UI reload
+    await _upsertRemote(updated).catchError((e) => debugPrint('Sync failed: $e'));
+    
     _reminderUpdatesController.add(null);
-
-    _upsertRemote(updated).catchError((e) => debugPrint('Sync failed: $e'));
   }
 
   Future<void> snoozeReminder(
@@ -184,9 +197,10 @@ class ReminderService {
     _cachedReminders.removeWhere((r) => r.id == snoozed.id);
     _cachedReminders.add(snoozed);
 
+    // Await sync to prevent race with UI reload
+    await _upsertRemote(snoozed).catchError((e) => debugPrint('Sync failed: $e'));
+    
     _reminderUpdatesController.add(null);
-
-    _upsertRemote(snoozed).catchError((e) => debugPrint('Sync failed: $e'));
   }
 
   Future<void> snoozeReminderTomorrow(int id) async {
@@ -288,7 +302,10 @@ class ReminderService {
 
         // Remove local items that are no longer on the sheet
         for (final r in localReminders) {
-          if (!remoteIds.contains(r.id)) {
+          // Only delete locally if it's NOT in the remote AND it was an active reminder.
+          // Inactive (completed) reminders might not be in the remote if the sheet filters them,
+          // so we keep them locally to show in the "Completed" sections.
+          if (!remoteIds.contains(r.id) && r.isActive) {
             await DatabaseService.instance.deleteReminder(r.id);
             if (!kIsWeb) await _notifications.cancel(r.id).catchError((_) {});
           }

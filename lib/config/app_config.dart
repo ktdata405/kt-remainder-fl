@@ -6,7 +6,7 @@
 
 // Paste your Apps Script Web App URL here.
 // Get it from: Google Sheet → Extensions → Apps Script → Deploy → New deployment
-const String kWebAppUrl = 'https://script.google.com/macros/s/AKfycbyZtz0orkaDPjbhANKsohgPFDxFT-cw6B3unkYiSy4NkPk6OGBFss8qhsbHhRz7EXxj/exec';
+const String kWebAppUrl = 'https://script.google.com/macros/s/AKfycbziNKQw2x5l1VBWXRCccqKqMX9y7-xlD6XSeGZGyGxPCxT5pl-tBXk2e5npU_ZNdm-X/exec';
 
 // Repository and Download links
 const String kRepoUrl = 'https://github.com/ktdata405/kt-remainder-fl';

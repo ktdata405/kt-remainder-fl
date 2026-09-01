@@ -21,7 +21,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE reminders(
@@ -32,10 +32,19 @@ class DatabaseService {
             repeatFrequency TEXT,
             isActive INTEGER,
             priority TEXT,
+            lastCompleted TEXT,
             customInterval INTEGER,
             customUnit TEXT
           )
         ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('ALTER TABLE reminders ADD COLUMN completedAt TEXT');
+        }
+        if (oldVersion < 3) {
+          await db.execute('ALTER TABLE reminders ADD COLUMN lastCompleted TEXT');
+        }
       },
     );
   }
@@ -101,6 +110,7 @@ class DatabaseService {
       'repeatFrequency': r.repeatFrequency.name,
       'isActive': r.isActive ? 1 : 0,
       'priority': r.priority.name,
+      'lastCompleted': r.lastCompleted?.toIso8601String(),
       'customInterval': r.customInterval,
       'customUnit': r.customUnit,
     };
@@ -121,6 +131,7 @@ class DatabaseService {
         (e) => e.name == map['priority'],
         orElse: () => ReminderPriority.medium,
       ),
+      lastCompleted: map['lastCompleted'] != null ? DateTime.parse(map['lastCompleted']) : null,
       customInterval: map['customInterval'],
       customUnit: map['customUnit'],
     );

@@ -10,6 +10,7 @@ class ReminderCard extends StatelessWidget {
     this.onTap,
     this.onComplete,
     this.onSnooze,
+    this.isReadOnly = false,
   });
 
   final Reminder reminder;
@@ -17,6 +18,7 @@ class ReminderCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onComplete;
   final VoidCallback? onSnooze;
+  final bool isReadOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +47,7 @@ class ReminderCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap: onTap,
+          onTap: isReadOnly ? null : onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
@@ -56,10 +58,14 @@ class ReminderCard extends StatelessWidget {
                     ? Radio<bool>(
                         value: true, 
                         groupValue: false, 
-                        onChanged: (_) => onComplete?.call(), 
+                        onChanged: isReadOnly ? null : (_) => onComplete?.call(), 
                         activeColor: const Color(0xFF10B981),
                       )
-                    : const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 24),
+                    : Icon(
+                        Icons.check_circle_rounded, 
+                        color: const Color(0xFF10B981).withOpacity(isReadOnly ? 0.5 : 1.0), 
+                        size: 24
+                      ),
                 ),
                 const SizedBox(width: 4),
                 Expanded(
@@ -72,16 +78,21 @@ class ReminderCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleMedium?.copyWith(
                           decoration: isCompleted ? TextDecoration.lineThrough : null,
+                          color: isReadOnly ? cs.onSurface.withOpacity(0.5) : null,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: isOverdue ? Colors.red.withOpacity(0.1) : cs.primary.withOpacity(0.05),
+                          color: isOverdue 
+                            ? Colors.red.withOpacity(isReadOnly ? 0.05 : 0.1) 
+                            : cs.primary.withOpacity(isReadOnly ? 0.02 : 0.05),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: isOverdue ? Colors.red.withOpacity(0.2) : cs.primary.withOpacity(0.1),
+                            color: isOverdue 
+                              ? Colors.red.withOpacity(isReadOnly ? 0.1 : 0.2) 
+                              : cs.primary.withOpacity(isReadOnly ? 0.05 : 0.1),
                           ),
                         ),
                         child: Row(
@@ -90,14 +101,14 @@ class ReminderCard extends StatelessWidget {
                             Icon(
                               Icons.access_time_filled_rounded, 
                               size: 12, 
-                              color: isOverdue ? Colors.red : cs.primary,
+                              color: (isOverdue ? Colors.red : cs.primary).withOpacity(isReadOnly ? 0.5 : 1.0),
                             ),
                             const SizedBox(width: 6),
                             Text(
                               SettingsService.instance.formatDateTime(reminder.scheduledTime),
                               style: theme.textTheme.bodySmall?.copyWith(
                                 fontWeight: FontWeight.w900,
-                                color: isOverdue ? Colors.red : cs.primary,
+                                color: (isOverdue ? Colors.red : cs.primary).withOpacity(isReadOnly ? 0.5 : 1.0),
                                 fontSize: 11,
                               ),
                             ),
@@ -108,15 +119,26 @@ class ReminderCard extends StatelessWidget {
                       Row(
                         children: [
                           if (reminder.repeatFrequency != RepeatFrequency.none) ...[
-                            Icon(_repeatIcon(reminder.repeatFrequency), size: 10, color: cs.primary.withOpacity(0.7)),
+                            Icon(
+                              _repeatIcon(reminder.repeatFrequency), 
+                              size: 10, 
+                              color: cs.primary.withOpacity(isReadOnly ? 0.35 : 0.7)
+                            ),
                             const SizedBox(width: 4),
-                            Text(_repeatLabel(reminder), style: theme.textTheme.bodySmall?.copyWith(fontSize: 9, fontWeight: FontWeight.w700)),
+                            Text(
+                              _repeatLabel(reminder), 
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontSize: 9, 
+                                fontWeight: FontWeight.w700,
+                                color: isReadOnly ? cs.onSurface.withOpacity(0.5) : null,
+                              )
+                            ),
                             const SizedBox(width: 8),
                           ],
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: priorityColor.withOpacity(0.1), 
+                              color: priorityColor.withOpacity(isReadOnly ? 0.05 : 0.1), 
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -124,34 +146,16 @@ class ReminderCard extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 8, 
                                 fontWeight: FontWeight.w900, 
-                                color: priorityColor,
+                                color: priorityColor.withOpacity(isReadOnly ? 0.5 : 1.0),
                               ),
                             ),
                           ),
-                          if (isOverdue) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.1), 
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text(
-                                'OVERDUE', 
-                                style: TextStyle(
-                                  fontSize: 8, 
-                                  fontWeight: FontWeight.w900, 
-                                  color: Colors.red,
-                                ),
-                              ),
-                            ),
-                          ],
                         ],
                       ),
                     ],
                   ),
                 ),
-                if (reminder.isActive && !isBusy)
+                if (reminder.isActive && !isBusy && !isReadOnly)
                   Padding(
                     padding: const EdgeInsets.only(left: 8),
                     child: FilledButton.tonal(

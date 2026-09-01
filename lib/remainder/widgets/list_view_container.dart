@@ -50,6 +50,9 @@ class ListViewContainer extends StatefulWidget {
 class _ListViewContainerState extends State<ListViewContainer> {
   TaskFilter _filter = TaskFilter.pending;
   int _currentIndex = 0;
+  bool _todayExpanded = true;
+  bool _todayCompletedExpanded = false;
+  bool _upcomingExpanded = false;
 
   void _openAddSheet(BuildContext context) {
     showModalBottomSheet(
@@ -78,8 +81,24 @@ class _ListViewContainerState extends State<ListViewContainer> {
     // However, we can use memoization or move it to a method to keep build clean.
     final visible = _getVisibleReminders(showAll);
     final today = DateTime.now();
-    final todayTasks = visible.where((r) => r.isActive && _isSameDay(r.scheduledTime, today)).toList();
-    final upcomingTasks = visible.where((r) => r.isActive && r.scheduledTime.isAfter(DateTime(today.year, today.month, today.day, 23, 59))).toList();
+    final endOfToday = DateTime(today.year, today.month, today.day, 23, 59, 59);
+    
+    final allTasks = widget.reminders;
+    
+    // Active tasks due today or overdue
+    final todayTasks = allTasks.where((r) => 
+      r.isActive && r.scheduledTime.isBefore(endOfToday)
+    ).toList();
+    
+    // Completed tasks that were finished TODAY (includes both one-time and recurring)
+    final todayCompletedTasks = allTasks.where((r) => 
+      r.lastCompleted != null && _isSameDay(r.lastCompleted!, today)
+    ).toList();
+    
+    // Active tasks due after today
+    final upcomingTasks = allTasks.where((r) => 
+      r.isActive && r.scheduledTime.isAfter(endOfToday)
+    ).toList();
 
     return Scaffold(
       body: SafeArea(
@@ -95,20 +114,64 @@ class _ListViewContainerState extends State<ListViewContainer> {
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
                       children: [
                         if (_filter == TaskFilter.pending) ...[
-                          if (todayTasks.isNotEmpty) ...[
-                            const _SectionHeader(title: 'Today Remainders'),
-                            ...todayTasks.map(_reminderItem),
-                            const SizedBox(height: 24),
+                          _SectionHeader(
+                            title: 'Today Remainders', 
+                            count: todayTasks.length,
+                            isExpanded: _todayExpanded, 
+                            onToggle: () => setState(() => _todayExpanded = !_todayExpanded),
+                          ),
+                          if (_todayExpanded) ...[
+                            if (todayTasks.isEmpty) 
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+                                child: Text('No active tasks for today', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                              )
+                            else 
+                              ...todayTasks.map(_reminderItem),
                           ],
-                          if (upcomingTasks.isNotEmpty) ...[
-                            const _SectionHeader(title: 'Upcoming Remainders'),
-                            ...upcomingTasks.map(_reminderItem),
+                          const SizedBox(height: 24),
+                          
+                          _SectionHeader(
+                            title: 'Today Closed Remainders', 
+                            count: todayCompletedTasks.length,
+                            isExpanded: _todayCompletedExpanded, 
+                            onToggle: () => setState(() => _todayCompletedExpanded = !_todayCompletedExpanded),
+                          ),
+                          if (_todayCompletedExpanded) ...[
+                            if (todayCompletedTasks.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+                                child: Text('No completed tasks yet', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                              )
+                            else
+                              ...todayCompletedTasks.map((r) => _reminderItem(r, isReadOnly: true)),
                           ],
-                          if (todayTasks.isEmpty && upcomingTasks.isEmpty) 
-                            EmptyState(onAdd: () => _openAddSheet(context)),
+                          const SizedBox(height: 24),
+                          
+                          _SectionHeader(
+                            title: 'Upcoming Remainders', 
+                            count: upcomingTasks.length,
+                            isExpanded: _upcomingExpanded, 
+                            onToggle: () => setState(() => _upcomingExpanded = !_upcomingExpanded),
+                          ),
+                          if (_upcomingExpanded) ...[
+                            if (upcomingTasks.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+                                child: Text('No upcoming tasks', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                              )
+                            else
+                              ...upcomingTasks.map(_reminderItem),
+                          ],
+                          
+                          if (todayTasks.isEmpty && todayCompletedTasks.isEmpty && upcomingTasks.isEmpty) 
+                            Padding(
+                              padding: const EdgeInsets.only(top: 40),
+                              child: EmptyState(onAdd: () => _openAddSheet(context)),
+                            ),
                         ] else ...[
                           if (visible.isEmpty) EmptyState(onAdd: () => _openAddSheet(context)),
-                          ...visible.map(_reminderItem),
+                          ...visible.map((r) => _reminderItem(r, isReadOnly: !r.isActive)),
                         ],
                       ],
                     ),
@@ -180,7 +243,7 @@ class _ListViewContainerState extends State<ListViewContainer> {
     );
   }
 
-  Widget _reminderItem(Reminder r) {
+  Widget _reminderItem(Reminder r, {bool isReadOnly = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: ReminderCard(
@@ -189,6 +252,7 @@ class _ListViewContainerState extends State<ListViewContainer> {
         onTap: () => _openEditSheet(context, r),
         onComplete: () => widget.onComplete(r.id),
         onSnooze: () => widget.onSnooze(r),
+        isReadOnly: isReadOnly,
       ),
     );
   }
@@ -285,20 +349,87 @@ class _ListViewContainerState extends State<ListViewContainer> {
 }
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title});
+  const _SectionHeader({
+    required this.title,
+    required this.count,
+    required this.isExpanded,
+    required this.onToggle,
+  });
+  
   final String title;
+  final int count;
+  final bool isExpanded;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12, top: 8),
-      child: Text(
-        title, 
-        style: TextStyle(
-          fontWeight: FontWeight.w900, 
-          fontSize: 12, 
-          color: Theme.of(context).colorScheme.primary, 
-          letterSpacing: 1.2,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: InkWell(
+        onTap: onToggle,
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: isExpanded 
+              ? cs.primary.withOpacity(isDark ? 0.15 : 0.05) 
+              : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isExpanded 
+                ? cs.primary.withOpacity(0.1) 
+                : Colors.transparent,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 4,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: isExpanded ? cs.primary : cs.primary.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title.toUpperCase(), 
+                style: TextStyle(
+                  fontWeight: FontWeight.w900, 
+                  fontSize: 12, 
+                  color: isExpanded ? cs.primary : cs.onSurface.withOpacity(0.6), 
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isExpanded ? cs.primary : cs.onSurface.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  count.toString(),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    color: isExpanded ? cs.onPrimary : cs.onSurface.withOpacity(0.6),
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Icon(
+                isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                size: 20,
+                color: isExpanded ? cs.primary : cs.onSurface.withOpacity(0.4),
+              ),
+            ],
+          ),
         ),
       ),
     );
