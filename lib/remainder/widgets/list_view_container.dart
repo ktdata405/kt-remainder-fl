@@ -114,56 +114,36 @@ class _ListViewContainerState extends State<ListViewContainer> {
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
                       children: [
                         if (_filter == TaskFilter.pending) ...[
-                          _SectionHeader(
-                            title: 'Today Remainders', 
+                          _buildGroupedSection(
+                            title: 'Today Remainders',
                             count: todayTasks.length,
-                            isExpanded: _todayExpanded, 
+                            isExpanded: _todayExpanded,
                             onToggle: () => setState(() => _todayExpanded = !_todayExpanded),
+                            accentColor: Colors.orange,
+                            emptyMessage: 'No active tasks for today',
+                            children: todayTasks.map(_reminderItem).toList(),
                           ),
-                          if (_todayExpanded) ...[
-                            if (todayTasks.isEmpty) 
-                              const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
-                                child: Text('No active tasks for today', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                              )
-                            else 
-                              ...todayTasks.map(_reminderItem),
-                          ],
-                          const SizedBox(height: 24),
-                          
-                          _SectionHeader(
-                            title: 'Today Closed Remainders', 
+                          _buildGroupedSection(
+                            title: 'Today Completed Remainders',
                             count: todayCompletedTasks.length,
-                            isExpanded: _todayCompletedExpanded, 
+                            isExpanded: _todayCompletedExpanded,
                             onToggle: () => setState(() => _todayCompletedExpanded = !_todayCompletedExpanded),
+                            accentColor: Colors.green,
+                            emptyMessage: 'No completed tasks yet',
+                            children: todayCompletedTasks
+                                .map((r) => _reminderItem(r, isReadOnly: true))
+                                .toList(),
                           ),
-                          if (_todayCompletedExpanded) ...[
-                            if (todayCompletedTasks.isEmpty)
-                              const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
-                                child: Text('No completed tasks yet', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                              )
-                            else
-                              ...todayCompletedTasks.map((r) => _reminderItem(r, isReadOnly: true)),
-                          ],
-                          const SizedBox(height: 24),
-                          
-                          _SectionHeader(
-                            title: 'Upcoming Remainders', 
+                          _buildGroupedSection(
+                            title: 'Upcoming Remainders',
                             count: upcomingTasks.length,
-                            isExpanded: _upcomingExpanded, 
+                            isExpanded: _upcomingExpanded,
                             onToggle: () => setState(() => _upcomingExpanded = !_upcomingExpanded),
+                            accentColor: Colors.blue,
+                            emptyMessage: 'No upcoming tasks',
+                            children: upcomingTasks.map(_reminderItem).toList(),
                           ),
-                          if (_upcomingExpanded) ...[
-                            if (upcomingTasks.isEmpty)
-                              const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
-                                child: Text('No upcoming tasks', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                              )
-                            else
-                              ...upcomingTasks.map(_reminderItem),
-                          ],
-                          
+
                           if (todayTasks.isEmpty && todayCompletedTasks.isEmpty && upcomingTasks.isEmpty) 
                             Padding(
                               padding: const EdgeInsets.only(top: 40),
@@ -253,6 +233,51 @@ class _ListViewContainerState extends State<ListViewContainer> {
         onComplete: () => widget.onComplete(r.id),
         onSnooze: () => widget.onSnooze(r),
         isReadOnly: isReadOnly,
+      ),
+    );
+  }
+
+  Widget _buildGroupedSection({
+    required String title,
+    required int count,
+    required bool isExpanded,
+    required VoidCallback onToggle,
+    required Color accentColor,
+    required String emptyMessage,
+    required List<Widget> children,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+      decoration: BoxDecoration(
+        color: accentColor.withOpacity(isDark ? 0.18 : 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: accentColor.withOpacity(isDark ? 0.35 : 0.2),
+        ),
+      ),
+      child: Column(
+        children: [
+          _SectionHeader(
+            title: title,
+            count: count,
+            isExpanded: isExpanded,
+            onToggle: onToggle,
+            accentColor: accentColor,
+          ),
+          if (isExpanded)
+            if (children.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+                child: Text(
+                  emptyMessage,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              )
+            else
+              ...children,
+        ],
       ),
     );
   }
@@ -354,12 +379,14 @@ class _SectionHeader extends StatelessWidget {
     required this.count,
     required this.isExpanded,
     required this.onToggle,
+    required this.accentColor,
   });
   
   final String title;
   final int count;
   final bool isExpanded;
   final VoidCallback onToggle;
+  final Color accentColor;
 
   @override
   Widget build(BuildContext context) {
@@ -377,12 +404,12 @@ class _SectionHeader extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: isExpanded 
-              ? cs.primary.withOpacity(isDark ? 0.15 : 0.05) 
+              ? cs.primary.withOpacity(isDark ? 0.15 : 0.05)
               : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isExpanded 
-                ? cs.primary.withOpacity(0.1) 
+                ? cs.primary.withOpacity(0.1)
                 : Colors.transparent,
             ),
           ),
@@ -392,7 +419,7 @@ class _SectionHeader extends StatelessWidget {
                 width: 4,
                 height: 16,
                 decoration: BoxDecoration(
-                  color: isExpanded ? cs.primary : cs.primary.withOpacity(0.3),
+                  color: isExpanded ? accentColor : accentColor.withOpacity(0.3),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -402,7 +429,7 @@ class _SectionHeader extends StatelessWidget {
                 style: TextStyle(
                   fontWeight: FontWeight.w900, 
                   fontSize: 12, 
-                  color: isExpanded ? cs.primary : cs.onSurface.withOpacity(0.6), 
+                  color: isExpanded ? accentColor : cs.onSurface.withOpacity(0.6),
                   letterSpacing: 1.2,
                 ),
               ),
@@ -410,7 +437,7 @@ class _SectionHeader extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: isExpanded ? cs.primary : cs.onSurface.withOpacity(0.1),
+                  color: isExpanded ? accentColor : cs.onSurface.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -426,7 +453,7 @@ class _SectionHeader extends StatelessWidget {
               Icon(
                 isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
                 size: 20,
-                color: isExpanded ? cs.primary : cs.onSurface.withOpacity(0.4),
+                color: isExpanded ? accentColor : cs.onSurface.withOpacity(0.4),
               ),
             ],
           ),
