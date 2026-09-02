@@ -206,7 +206,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   future: PackageInfo.fromPlatform(),
                   builder: (context, snapshot) {
                     final version = snapshot.hasData 
-                        ? "${snapshot.data!.version}+${snapshot.data!.buildNumber}" 
+                        //? "${snapshot.data!.version}+${snapshot.data!.buildNumber}"
+                       ? snapshot.data!.version
                         : "Loading...";
                     return ListTile(
                       leading: const Icon(Icons.info_outline),

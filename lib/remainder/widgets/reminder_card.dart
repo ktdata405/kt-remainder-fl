@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../services/settings_service.dart';
 import '../reminder_model.dart';
 
 class ReminderCard extends StatelessWidget {
@@ -31,15 +30,19 @@ class ReminderCard extends StatelessWidget {
     final isOverdue = reminder.isActive && reminder.scheduledTime.isBefore(DateTime.now());
     final isCompleted = !reminder.isActive;
     final priorityColor = _getPriorityColor(reminder.priority);
+    final date = reminder.scheduledTime;
+    final dateTop = '${_weekdayShort(date.weekday)} ${date.day}';
+    final dateBottom = _monthShort(date.month);
+    final timeText = TimeOfDay.fromDateTime(date).format(context);
 
     return Container(
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFE2E8F0)),
+        border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -51,139 +54,192 @@ class ReminderCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           onTap: isReadOnly ? null : onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  width: 40,
-                  child: reminder.isActive 
-                    ? Radio<bool>(
-                        value: true, 
-                        groupValue: false, 
-                        onChanged: isReadOnly ? null : (_) => onComplete?.call(), 
-                        activeColor: const Color(0xFF10B981),
-                      )
-                    : Icon(
-                        Icons.check_circle_rounded, 
-                        color: const Color(0xFF10B981).withOpacity(isReadOnly ? 0.5 : 1.0), 
-                        size: 24
-                      ),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
+                Container(
+                  width: 80,
+                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+                  decoration: BoxDecoration(
+                    color: isOverdue
+                        ? Colors.red.withValues(alpha: 0.08)
+                        : cs.primary.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isOverdue
+                          ? Colors.red.withValues(alpha: 0.22)
+                          : cs.primary.withValues(alpha: 0.18),
+                    ),
+                  ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        reminder.title,
+                        dateTop,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          decoration: isCompleted ? TextDecoration.lineThrough : null,
-                          color: isReadOnly ? cs.onSurface.withOpacity(0.5) : null,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: isOverdue ? Colors.red : cs.primary,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        dateBottom,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: (isOverdue ? Colors.red : cs.primary).withValues(alpha: 0.85),
+                          fontSize: 11,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: isOverdue 
-                            ? Colors.red.withOpacity(isReadOnly ? 0.05 : 0.1) 
-                            : cs.primary.withOpacity(isReadOnly ? 0.02 : 0.05),
+                          color: cs.surface,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: isOverdue 
-                              ? Colors.red.withOpacity(isReadOnly ? 0.1 : 0.2) 
-                              : cs.primary.withOpacity(isReadOnly ? 0.05 : 0.1),
+                        ),
+                        child: Text(
+                          timeText,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 9,
                           ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.access_time_filled_rounded, 
-                              size: 12, 
-                              color: (isOverdue ? Colors.red : cs.primary).withOpacity(isReadOnly ? 0.5 : 1.0),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              SettingsService.instance.formatDateTime(reminder.scheduledTime),
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                color: (isOverdue ? Colors.red : cs.primary).withOpacity(isReadOnly ? 0.5 : 1.0),
-                                fontSize: 11,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              reminder.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                decoration: isCompleted ? TextDecoration.lineThrough : null,
+                                color: isReadOnly ? cs.onSurface.withValues(alpha: 0.55) : null,
+                                fontWeight: FontWeight.w800,
+                                height: 1.15,
                               ),
                             ),
-                          ],
+                          ),
+                          const SizedBox(width: 6),
+                          reminder.isActive
+                              ? IconButton(
+                                  onPressed: isReadOnly ? null : onComplete,
+                                  tooltip: 'Complete',
+                                  visualDensity: VisualDensity.compact,
+                                  constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+                                  icon: const Icon(Icons.radio_button_unchecked_rounded, size: 19),
+                                )
+                              : Icon(
+                                  Icons.check_circle_rounded,
+                                  color: const Color(0xFF10B981).withValues(alpha: isReadOnly ? 0.5 : 1),
+                                  size: 20,
+                                ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        reminder.body.trim().isEmpty ? 'No description' : reminder.body,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: isReadOnly ? 0.45 : 0.72),
+                          height: 1.25,
                         ),
                       ),
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          if (reminder.repeatFrequency != RepeatFrequency.none) ...[
-                            Icon(
-                              _repeatIcon(reminder.repeatFrequency), 
-                              size: 10, 
-                              color: cs.primary.withOpacity(isReadOnly ? 0.35 : 0.7)
+                          if (reminder.repeatFrequency != RepeatFrequency.none)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: cs.primary.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                _repeatLabel(reminder),
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: cs.primary,
+                                  fontSize: 10,
+                                ),
+                              ),
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _repeatLabel(reminder), 
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                fontSize: 9, 
-                                fontWeight: FontWeight.w700,
-                                color: isReadOnly ? cs.onSurface.withOpacity(0.5) : null,
-                              )
-                            ),
-                            const SizedBox(width: 8),
-                          ],
+                          if (reminder.repeatFrequency != RepeatFrequency.none) const SizedBox(width: 6),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                             decoration: BoxDecoration(
-                              color: priorityColor.withOpacity(isReadOnly ? 0.05 : 0.1), 
-                              borderRadius: BorderRadius.circular(4),
+                              color: priorityColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              reminder.priority.name.toUpperCase(), 
+                              reminder.priority.name.toUpperCase(),
                               style: TextStyle(
-                                fontSize: 8, 
-                                fontWeight: FontWeight.w900, 
-                                color: priorityColor.withOpacity(isReadOnly ? 0.5 : 1.0),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: priorityColor,
                               ),
                             ),
                           ),
+                          const Spacer(),
+                          if (reminder.isActive && !isBusy && !isReadOnly) ...[
+                            IconButton.filledTonal(
+                              onPressed: onNotifyNow,
+                              tooltip: 'Notify now',
+                              style: IconButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                minimumSize: const Size(30, 30),
+                                padding: const EdgeInsets.all(6),
+                              ),
+                              icon: const Icon(Icons.notifications_active_rounded, size: 14),
+                            ),
+                            const SizedBox(width: 6),
+                            FilledButton.tonal(
+                              onPressed: onSnooze,
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                minimumSize: const Size(0, 30),
+                                visualDensity: VisualDensity.compact,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.snooze_rounded, size: 12),
+                                  SizedBox(width: 3),
+                                  Text('Snooze', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800)),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
+                      if (isBusy)
+                        Container(
+                          decoration: BoxDecoration(
+                            color: cs.primary.withValues(alpha: 0.04),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            child: Text('Updating...', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
+                          ),
+                        ),
                     ],
                   ),
                 ),
-                if (reminder.isActive && !isBusy && !isReadOnly)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton.filledTonal(
-                        onPressed: onNotifyNow,
-                        tooltip: 'Notify now',
-                        icon: const Icon(Icons.notifications_active_rounded, size: 18),
-                      ),
-                      const SizedBox(width: 6),
-                      FilledButton.tonal(
-                        onPressed: onSnooze,
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          minimumSize: const Size(0, 36),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.snooze_rounded, size: 14),
-                            SizedBox(width: 4),
-                            Text('Snooze', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
               ],
             ),
           ),
@@ -200,20 +256,37 @@ class ReminderCard extends StatelessWidget {
     };
   }
 
-  IconData _repeatIcon(RepeatFrequency f) => switch (f) {
-    RepeatFrequency.daily => Icons.today_rounded,
-    RepeatFrequency.weekly => Icons.date_range_rounded,
-    RepeatFrequency.monthly => Icons.calendar_month_rounded,
-    RepeatFrequency.weekdays => Icons.work_outline_rounded,
-    RepeatFrequency.yearly => Icons.event_available_rounded,
-    RepeatFrequency.custom => Icons.tune_rounded,
-    _ => Icons.notifications_none_rounded,
-  };
-
   String _repeatLabel(Reminder r) {
     if (r.repeatFrequency == RepeatFrequency.custom) return 'Every ${r.customInterval} ${r.customUnit}';
     if (r.repeatFrequency == RepeatFrequency.weekdays) return 'Weekdays';
     if (r.repeatFrequency == RepeatFrequency.weekends) return 'Weekends';
     return r.repeatFrequency.name[0].toUpperCase() + r.repeatFrequency.name.substring(1);
   }
+
+  String _weekdayShort(int weekday) => switch (weekday) {
+    DateTime.monday => 'Mon',
+    DateTime.tuesday => 'Tue',
+    DateTime.wednesday => 'Wed',
+    DateTime.thursday => 'Thu',
+    DateTime.friday => 'Fri',
+    DateTime.saturday => 'Sat',
+    DateTime.sunday => 'Sun',
+    _ => 'Day',
+  };
+
+  String _monthShort(int month) => switch (month) {
+    1 => 'Jan',
+    2 => 'Feb',
+    3 => 'Mar',
+    4 => 'Apr',
+    5 => 'May',
+    6 => 'Jun',
+    7 => 'Jul',
+    8 => 'Aug',
+    9 => 'Sep',
+    10 => 'Oct',
+    11 => 'Nov',
+    12 => 'Dec',
+    _ => 'Mon',
+  };
 }
