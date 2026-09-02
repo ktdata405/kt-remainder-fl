@@ -9,6 +9,7 @@ class ReminderCard extends StatelessWidget {
     required this.isBusy,
     this.onTap,
     this.onComplete,
+    this.onNotifyNow,
     this.onSnooze,
     this.isReadOnly = false,
   });
@@ -17,6 +18,7 @@ class ReminderCard extends StatelessWidget {
   final bool isBusy;
   final VoidCallback? onTap;
   final VoidCallback? onComplete;
+  final VoidCallback? onNotifyNow;
   final VoidCallback? onSnooze;
   final bool isReadOnly;
 
@@ -156,23 +158,31 @@ class ReminderCard extends StatelessWidget {
                   ),
                 ),
                 if (reminder.isActive && !isBusy && !isReadOnly)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: FilledButton.tonal(
-                      onPressed: onSnooze,
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        minimumSize: const Size(0, 36),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton.filledTonal(
+                        onPressed: onNotifyNow,
+                        tooltip: 'Notify now',
+                        icon: const Icon(Icons.notifications_active_rounded, size: 18),
                       ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.snooze_rounded, size: 14),
-                          SizedBox(width: 4),
-                          Text('Snooze', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
-                        ],
+                      const SizedBox(width: 6),
+                      FilledButton.tonal(
+                        onPressed: onSnooze,
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          minimumSize: const Size(0, 36),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.snooze_rounded, size: 14),
+                            SizedBox(width: 4),
+                            Text('Snooze', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
                   ),
               ],
             ),

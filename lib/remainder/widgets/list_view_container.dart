@@ -19,6 +19,7 @@ class ListViewContainer extends StatefulWidget {
     required this.onRefresh,
     required this.onCancel,
     required this.onComplete,
+    required this.onNotifyNow,
     required this.onSnooze,
     required this.onAdd,
     required this.onEdit,
@@ -35,6 +36,7 @@ class ListViewContainer extends StatefulWidget {
   final Future<void> Function() onRefresh;
   final Future<void> Function(int) onCancel;
   final Future<void> Function(int) onComplete;
+  final Future<void> Function(int) onNotifyNow;
   final Future<void> Function(Reminder) onSnooze;
   final Future<void> Function(Reminder) onAdd;
   final Future<void> Function(Reminder) onEdit;
@@ -231,6 +233,7 @@ class _ListViewContainerState extends State<ListViewContainer> {
         isBusy: widget.busyReminderIds.contains(r.id),
         onTap: () => _openEditSheet(context, r),
         onComplete: () => widget.onComplete(r.id),
+        onNotifyNow: () => widget.onNotifyNow(r.id),
         onSnooze: () => widget.onSnooze(r),
         isReadOnly: isReadOnly,
       ),

@@ -21,9 +21,10 @@ const String _actionSnoozeCustom = 'action_snooze_custom';
 const String _kPendingCustomSnoozeId = 'pending_custom_snooze_id';
 
 @pragma('vm:entry-point')
-void notificationTapBackground(NotificationResponse response) {
+Future<void> notificationTapBackground(NotificationResponse response) async {
   DartPluginRegistrant.ensureInitialized();
-  ReminderService.instance.handleNotificationAction(response);
+  // Keep the background isolate alive until action processing is finished.
+  await ReminderService.instance.handleNotificationAction(response);
 }
 
 class ReminderService {
@@ -163,6 +164,13 @@ class ReminderService {
     await _upsertRemote(updated).catchError((e) => debugPrint('Sync failed: $e'));
     
     _reminderUpdatesController.add(null);
+  }
+
+  Future<void> pushReminderToNotificationBar(int id) async {
+    _assertInitialized();
+    final reminder = await _findReminderById(id);
+    if (reminder == null) throw StateError('Reminder not found: $id');
+    await _showImmediateNotification(reminder);
   }
 
   Future<void> snoozeReminder(
@@ -446,6 +454,29 @@ class ReminderService {
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: _matchComponentsFor(r.repeatFrequency),
+        payload: jsonEncode(r.toMap()),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _showImmediateNotification(Reminder r) async {
+    if (kIsWeb || !r.isActive) return;
+    try {
+      const androidDetails = AndroidNotificationDetails(
+        'reminders_channel', 'Reminders',
+        importance: Importance.max, priority: Priority.high,
+        groupKey: 'com.example.kt_remainder_fl.REMINDERS',
+        actions: [
+          AndroidNotificationAction(_actionComplete, 'Complete', cancelNotification: true, showsUserInterface: false),
+          AndroidNotificationAction(_actionSnooze1h, 'Snooze 1h', cancelNotification: true, showsUserInterface: false),
+          AndroidNotificationAction(_actionSnoozeCustom, 'Snooze', cancelNotification: true, showsUserInterface: true),
+        ],
+      );
+      await _notifications.show(
+        r.id,
+        r.title,
+        r.body,
+        const NotificationDetails(android: androidDetails),
         payload: jsonEncode(r.toMap()),
       );
     } catch (_) {}

@@ -158,7 +158,8 @@ class _ReminderScreenState extends State<ReminderScreen> with WidgetsBindingObse
     setState(() => _busyReminderIds.add(id));
     try {
       await _service.completeReminder(id);
-      await _reload();
+      // Keep the just-completed state visible immediately; avoid race with remote fetch.
+      await _reload(backgroundSync: false);
       _snack('Reminder updated');
     } catch (e) {
       _snack('Update failed: $e');
@@ -176,6 +177,19 @@ class _ReminderScreenState extends State<ReminderScreen> with WidgetsBindingObse
       _snack('Snoozed');
     } catch (e) {
       _snack('Snooze failed: $e');
+    } finally {
+      setState(() => _busyReminderIds.remove(id));
+    }
+  }
+
+  Future<void> _notifyReminderNow(int id) async {
+    if (_busyReminderIds.contains(id)) return;
+    setState(() => _busyReminderIds.add(id));
+    try {
+      await _service.pushReminderToNotificationBar(id);
+      _snack('Reminder sent to notification bar');
+    } catch (e) {
+      _snack('Notify failed: $e');
     } finally {
       setState(() => _busyReminderIds.remove(id));
     }
@@ -277,6 +291,7 @@ class _ReminderScreenState extends State<ReminderScreen> with WidgetsBindingObse
       onRefresh: _reload,
       onCancel: _cancelReminder,
       onComplete: _completeReminder,
+      onNotifyNow: _notifyReminderNow,
       onSnooze: (r) => _showSnoozePickerForId(r.id),
       onAdd: (r) => _service.scheduleReminder(r).then((_) => _reload()),
       onEdit: (r) => _service.scheduleReminder(r).then((_) => _reload()),
