@@ -30,10 +30,17 @@ class ReminderCard extends StatelessWidget {
     final isOverdue = reminder.isActive && reminder.scheduledTime.isBefore(DateTime.now());
     final isCompleted = !reminder.isActive;
     final priorityColor = _getPriorityColor(reminder.priority);
-    final date = reminder.scheduledTime;
+    
+    // Ensure we are working with local time for the UI
+    final date = reminder.scheduledTime.isUtc ? reminder.scheduledTime.toLocal() : reminder.scheduledTime;
+    
     final dateTop = '${_weekdayShort(date.weekday)} ${date.day}';
     final dateBottom = _monthShort(date.month);
-    final timeText = TimeOfDay.fromDateTime(date).format(context);
+    
+    // Explicitly format time as HH:MM AM/PM
+    final hour12 = date.hour % 12 == 0 ? 12 : date.hour % 12;
+    final ampm = date.hour >= 12 ? 'PM' : 'AM';
+    final timeText = '${hour12.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')} $ampm';
 
     return Container(
       decoration: BoxDecoration(
