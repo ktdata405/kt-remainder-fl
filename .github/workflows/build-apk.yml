@@ -253,8 +253,8 @@ jobs:
             <p><b>Run:</b> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Open workflow run</a></p>
             <p><b>Direct Download Links (ZIP):</b></p>
             <ul>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">Download Debug APK</a> (<a href="googlechrome://navigate?url=https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">via Chrome</a>)</li>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">Download Release APK</a> (<a href="googlechrome://navigate?url=https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">via Chrome</a>)</li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">Download Debug APK-${{ github.run_number }}</a></li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">Download Release APK-${{ github.run_number }}</a></li>
             </ul>
             <p>Download artifacts from this run:</p>
             <ul>
@@ -293,8 +293,8 @@ jobs:
             <p><b>Run:</b> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Open workflow run</a></p>
             <p><b>Direct Download Links (ZIP):</b></p>
             <ul>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">Download Debug APK</a> (<a href="googlechrome://navigate?url=https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">via Chrome</a>)</li>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">Download Release APK</a> (<a href="googlechrome://navigate?url=https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">via Chrome</a>)</li>
+             <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">Download Debug APK-${{ github.run_number }}</a></li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">Download Release APK-${{ github.run_number }}</a></li>
             </ul>
             <p>Download artifacts from this run:</p>
             <ul>
