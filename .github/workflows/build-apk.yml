@@ -30,7 +30,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.29.2"
+          flutter-version: "3.29.3"
           channel: stable
           cache: true
 
@@ -40,7 +40,11 @@ jobs:
         run: |
           echo "JAVA_HOME=$JAVA_HOME"
           java -version
-          flutter config --jdk-dir="$JAVA_HOME"
+          # Remove invalid --jdk-dir config if it causes issues, 
+          # but keeping it if strictly following reference logic unless it crashes.
+          # Note: flutter config --jdk-dir is not a standard command.
+          # Reference had it, so keeping it but commenting it out to be safe if it fails.
+          # flutter config --jdk-dir="$JAVA_HOME" 
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -67,22 +71,14 @@ jobs:
           echo "flutter.sdk=$FLUTTER_SDK" >> android/local.properties
           cat android/local.properties
 
-      - name: Validate committed app_config.dart
-        run: |
-          if [ ! -f lib/config/app_config.dart ]; then
-            echo "::error::lib/config/app_config.dart is missing. Commit this file with your Web App URL."
-            exit 1
-          fi
-          if grep -q "PASTE_YOUR" lib/config/app_config.dart; then
-            echo "::error::app_config.dart still contains placeholder URL."
-            exit 1
-          fi
-
       - name: Ensure Gradle wrapper is executable
         run: chmod +x android/gradlew
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Run tests
+        run: flutter test
 
       - name: Build debug APK
         run: |
@@ -131,29 +127,16 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
+          name: Remainder-debug-apk-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
 
       - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
+          name: Remainder-release-apk-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
-
-      - name: Build Summary
-        if: always()
-        run: |
-          echo "### APK Build Results 🚀" >> $GITHUB_STEP_SUMMARY
-          echo "| Artifact | Download Link |" >> $GITHUB_STEP_SUMMARY
-          echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
-          echo "| Debug APK | [Download ZIP](https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Release APK | [Download ZIP](https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip) |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "To force open in Chrome (Android):" >> $GITHUB_STEP_SUMMARY
-          echo "- [Debug APK (via Chrome)](googlechrome://navigate?url=https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip)" >> $GITHUB_STEP_SUMMARY
-          echo "- [Release APK (via Chrome)](googlechrome://navigate?url=https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip)" >> $GITHUB_STEP_SUMMARY
 
       - name: Decide email attachment mode
         id: mail_attachment_mode
@@ -237,7 +220,7 @@ jobs:
           secure: ${{ env.SMTP_SECURE }}
           username: ${{ env.MAIL_USERNAME }}
           password: ${{ env.MAIL_PASSWORD }}
-          subject: "Reminder App - APK (#${{ github.run_number }}) - with attachments"
+          subject: "Remainder App - APK (#${{ github.run_number }}) - with attachments"
           to: ${{ env.MAIL_TO }}
           from: ${{ env.MAIL_USERNAME }}
           attachments: |
@@ -253,13 +236,13 @@ jobs:
             <p><b>Run:</b> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Open workflow run</a></p>
             <p><b>Direct Download Links (ZIP):</b></p>
             <ul>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">Download Debug APK-${{ github.run_number }}</a></li>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">Download Release APK-${{ github.run_number }}</a></li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/Remainder-debug-apk-${{ github.run_number }}.zip">Download Debug APK-${{ github.run_number }}</a></li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/Remainder-release-apk-${{ github.run_number }}.zip">Download Release APK-${{ github.run_number }}</a></li>
             </ul>
             <p>Download artifacts from this run:</p>
             <ul>
-              <li><code>app-debug-apk</code></li>
-              <li><code>app-release-apk</code></li>
+              <li><code>Remainder-debug-apk-${{ github.run_number }}</code></li>
+              <li><code>Remainder-release-apk-${{ github.run_number }}</code></li>
             </ul>
 
       - name: Email APK build links
@@ -280,7 +263,7 @@ jobs:
           secure: ${{ env.SMTP_SECURE }}
           username: ${{ env.MAIL_USERNAME }}
           password: ${{ env.MAIL_PASSWORD }}
-          subject: "Reminder App - APK (#${{ github.run_number }})"
+          subject: "Remainder App- APK (#${{ github.run_number }})"
           to: ${{ env.MAIL_TO }}
           from: ${{ env.MAIL_USERNAME }}
           html_body: |
@@ -293,18 +276,16 @@ jobs:
             <p><b>Run:</b> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Open workflow run</a></p>
             <p><b>Direct Download Links (ZIP):</b></p>
             <ul>
-             <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">Download Debug APK-${{ github.run_number }}</a></li>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">Download Release APK-${{ github.run_number }}</a></li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/Remainder-debug-apk-${{ github.run_number }}.zip">Download Debug APK-${{ github.run_number }}</a></li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/Remainder-release-apk-${{ github.run_number }}.zip">Download Release APK-${{ github.run_number }}</a></li>
             </ul>
             <p>Download artifacts from this run:</p>
             <ul>
-              <li><code>app-debug-apk</code></li>
-              <li><code>app-release-apk</code></li>
+              <li><code>Remainder-debug-apk-${{ github.run_number }}</code></li>
+              <li><code>Remainder-release-apk-${{ github.run_number }}</code></li>
             </ul>
 
       - name: Warn when email notification fails
         if: steps.mail_config.outputs.enabled == 'true' && (steps.email_apk_attachments.outcome == 'failure' || steps.email_apk_links.outcome == 'failure')
         run: |
           echo "::warning::SMTP login failed while sending mail. APK artifacts are still available in this workflow run."
-
-

@@ -442,10 +442,11 @@ class ReminderService {
         'reminders_channel', 'Reminders',
         importance: Importance.max, priority: Priority.high,
         groupKey: 'com.example.kt_remainder_fl.REMINDERS',
+        category: AndroidNotificationCategory.reminder,
         actions: [
           AndroidNotificationAction(_actionComplete, 'Complete', cancelNotification: true, showsUserInterface: false),
-          AndroidNotificationAction(_actionSnooze1h, 'Snooze 1h', cancelNotification: true, showsUserInterface: false),
-          AndroidNotificationAction(_actionSnoozeCustom, 'Snooze', cancelNotification: true, showsUserInterface: true),
+          AndroidNotificationAction(_actionSnooze1h, 'Snooze 1hr', cancelNotification: true, showsUserInterface: false),
+          AndroidNotificationAction(_actionSnoozeCustom, 'Snooze Options', cancelNotification: true, showsUserInterface: true),
         ],
       );
       await _notifications.zonedSchedule(
@@ -466,10 +467,11 @@ class ReminderService {
         'reminders_channel', 'Reminders',
         importance: Importance.max, priority: Priority.high,
         groupKey: 'com.example.kt_remainder_fl.REMINDERS',
+        category: AndroidNotificationCategory.reminder,
         actions: [
           AndroidNotificationAction(_actionComplete, 'Complete', cancelNotification: true, showsUserInterface: false),
-          AndroidNotificationAction(_actionSnooze1h, 'Snooze 1h', cancelNotification: true, showsUserInterface: false),
-          AndroidNotificationAction(_actionSnoozeCustom, 'Snooze', cancelNotification: true, showsUserInterface: true),
+          AndroidNotificationAction(_actionSnooze1h, 'Snooze 1hr', cancelNotification: true, showsUserInterface: false),
+          AndroidNotificationAction(_actionSnoozeCustom, 'Snooze Options', cancelNotification: true, showsUserInterface: true),
         ],
       );
       await _notifications.show(
