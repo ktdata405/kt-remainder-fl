@@ -30,7 +30,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.29.3"
+          flutter-version: "3.29.2"
           channel: stable
           cache: true
 
@@ -40,11 +40,7 @@ jobs:
         run: |
           echo "JAVA_HOME=$JAVA_HOME"
           java -version
-          # Remove invalid --jdk-dir config if it causes issues, 
-          # but keeping it if strictly following reference logic unless it crashes.
-          # Note: flutter config --jdk-dir is not a standard command.
-          # Reference had it, so keeping it but commenting it out to be safe if it fails.
-          # flutter config --jdk-dir="$JAVA_HOME" 
+          flutter config --jdk-dir="$JAVA_HOME"
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -70,6 +66,17 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
           echo "flutter.sdk=$FLUTTER_SDK" >> android/local.properties
           cat android/local.properties
+
+      - name: Validate committed app_config.dart
+        run: |
+          if [ ! -f lib/config/app_config.dart ]; then
+            echo "::error::lib/config/app_config.dart is missing. Commit this file with your Web App URL."
+            exit 1
+          fi
+          if grep -q "PASTE_YOUR" lib/config/app_config.dart; then
+            echo "::error::app_config.dart still contains placeholder URL."
+            exit 1
+          fi
 
       - name: Ensure Gradle wrapper is executable
         run: chmod +x android/gradlew
@@ -134,6 +141,19 @@ jobs:
           name: Remainder-release-apk-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+      - name: Build Summary
+        if: always()
+        run: |
+          echo "### APK Build Results 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact | Download Link |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
+          echo "| Debug APK | [Download ZIP](https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release APK | [Download ZIP](https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "To force open in Chrome (Android):" >> $GITHUB_STEP_SUMMARY
+          echo "- [Debug APK (via Chrome)](googlechrome://navigate?url=https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Release APK (via Chrome)](googlechrome://navigate?url=https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip)" >> $GITHUB_STEP_SUMMARY
 
       - name: Decide email attachment mode
         id: mail_attachment_mode
@@ -286,3 +306,5 @@ jobs:
         if: steps.mail_config.outputs.enabled == 'true' && (steps.email_apk_attachments.outcome == 'failure' || steps.email_apk_links.outcome == 'failure')
         run: |
           echo "::warning::SMTP login failed while sending mail. APK artifacts are still available in this workflow run."
+
+
