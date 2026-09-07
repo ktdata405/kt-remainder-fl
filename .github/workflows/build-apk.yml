@@ -131,14 +131,14 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Remainder-debug-apk-${{ github.run_number }}
+          name: app-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
 
       - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
-          name: Remainder-release-apk-${{ github.run_number }}
+          name: app-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
 
@@ -237,7 +237,7 @@ jobs:
           secure: ${{ env.SMTP_SECURE }}
           username: ${{ env.MAIL_USERNAME }}
           password: ${{ env.MAIL_PASSWORD }}
-          subject: "Remainder App - APK (#${{ github.run_number }}) - with attachments"
+          subject: "Reminder App - APK (#${{ github.run_number }}) - with attachments"
           to: ${{ env.MAIL_TO }}
           from: ${{ env.MAIL_USERNAME }}
           attachments: |
@@ -253,13 +253,13 @@ jobs:
             <p><b>Run:</b> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Open workflow run</a></p>
             <p><b>Direct Download Links (ZIP):</b></p>
             <ul>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/Remainder-debug-apk-${{ github.run_number }}.zip">Download Debug APK-${{ github.run_number }}</a></li>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/Remainder-release-apk-${{ github.run_number }}.zip">Download Release APK-${{ github.run_number }}</a></li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">Download Debug APK-${{ github.run_number }}</a></li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">Download Release APK-${{ github.run_number }}</a></li>
             </ul>
             <p>Download artifacts from this run:</p>
             <ul>
-              <li><code>Remainder-debug-apk-${{ github.run_number }}</code></li>
-              <li><code>Remainder-release-apk-${{ github.run_number }}</code></li>
+              <li><code>app-debug-apk</code></li>
+              <li><code>app-release-apk</code></li>
             </ul>
 
       - name: Email APK build links
@@ -280,7 +280,7 @@ jobs:
           secure: ${{ env.SMTP_SECURE }}
           username: ${{ env.MAIL_USERNAME }}
           password: ${{ env.MAIL_PASSWORD }}
-          subject: "Remainder App- APK (#${{ github.run_number }})"
+          subject: "Reminder App - APK (#${{ github.run_number }})"
           to: ${{ env.MAIL_TO }}
           from: ${{ env.MAIL_USERNAME }}
           html_body: |
@@ -293,13 +293,13 @@ jobs:
             <p><b>Run:</b> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Open workflow run</a></p>
             <p><b>Direct Download Links (ZIP):</b></p>
             <ul>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/Remainder-debug-apk-${{ github.run_number }}.zip">Download Debug APK-${{ github.run_number }}</a></li>
-              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/Remainder-release-apk-${{ github.run_number }}.zip">Download Release APK-${{ github.run_number }}</a></li>
+             <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-debug-apk.zip">Download Debug APK-${{ github.run_number }}</a></li>
+              <li><a href="https://nightly.link/${{ github.repository }}/workflows/build-apk/${{ github.ref_name }}/app-release-apk.zip">Download Release APK-${{ github.run_number }}</a></li>
             </ul>
             <p>Download artifacts from this run:</p>
             <ul>
-              <li><code>Remainder-debug-apk-${{ github.run_number }}</code></li>
-              <li><code>Remainder-release-apk-${{ github.run_number }}</code></li>
+              <li><code>app-debug-apk</code></li>
+              <li><code>app-release-apk</code></li>
             </ul>
 
       - name: Warn when email notification fails
