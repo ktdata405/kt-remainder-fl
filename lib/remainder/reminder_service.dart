@@ -18,7 +18,11 @@ import 'reminder_model.dart';
 const String _actionComplete = 'action_complete';
 const String _actionSnooze1h = 'action_snooze_1h';
 const String _actionSnoozeCustom = 'action_snooze_custom';
+const String _actionReview = 'action_review';
+const String _actionSnoozeAll = 'action_snooze_all';
+const String _actionCompleteAll = 'action_complete_all';
 const String _kPendingCustomSnoozeId = 'pending_custom_snooze_id';
+const int _kSummaryNotificationId = 999999;
 
 @pragma('vm:entry-point')
 Future<void> notificationTapBackground(NotificationResponse response) async {
@@ -123,6 +127,7 @@ class ReminderService {
     await _upsertRemote(active).catchError((e) => debugPrint('Sync failed: $e'));
     
     _reminderUpdatesController.add(null);
+    _scheduleDailySummary();
   }
 
   Future<void> completeReminder(int id, {Reminder? fallbackReminder}) async {
@@ -148,6 +153,7 @@ class ReminderService {
       await _upsertRemote(updated).catchError((e) => debugPrint('Sync failed: $e'));
       
       _reminderUpdatesController.add(null);
+      _scheduleDailySummary();
       return;
     }
     
@@ -164,6 +170,7 @@ class ReminderService {
     await _upsertRemote(updated).catchError((e) => debugPrint('Sync failed: $e'));
     
     _reminderUpdatesController.add(null);
+    _scheduleDailySummary();
   }
 
   Future<void> pushReminderToNotificationBar(int id) async {
@@ -209,6 +216,7 @@ class ReminderService {
     await _upsertRemote(snoozed).catchError((e) => debugPrint('Sync failed: $e'));
     
     _reminderUpdatesController.add(null);
+    _scheduleDailySummary();
   }
 
   Future<void> snoozeReminderTomorrow(int id) async {
@@ -263,6 +271,7 @@ class ReminderService {
     }
     _cachedReminders.removeWhere((r) => r.id == id);
     _reminderUpdatesController.add(null);
+    _scheduleDailySummary();
     _cancelRemoteById(id).catchError((e) => debugPrint('Sync failed: $e'));
   }
 
@@ -329,6 +338,7 @@ class ReminderService {
       for (final reminder in updatedList.where((r) => r.isActive)) {
         await _scheduleNotification(reminder);
       }
+      await _scheduleDailySummary();
     } catch (e) {
       debugPrint('Remote sync failed: $e');
     }
@@ -419,6 +429,7 @@ class ReminderService {
     _cachedReminders.removeWhere((r) => r.id == target.id);
     _cachedReminders.add(target);
     _reminderUpdatesController.add(null);
+    _scheduleDailySummary();
 
     _upsertRemote(target).catchError((e) => debugPrint('Sync failed: $e'));
   }
@@ -526,6 +537,34 @@ class ReminderService {
         return;
       }
       
+      if (actionId == _actionSnoozeAll) {
+        debugPrint('Processing Snooze All action');
+        final reminders = await getLocalReminders();
+        final now = DateTime.now();
+        final overdue = reminders.where((r) => r.isActive && r.scheduledTime.isBefore(now)).toList();
+        for (final r in overdue) {
+          await snoozeReminder(r.id, by: const Duration(hours: 1), fallbackReminder: r);
+        }
+        return;
+      }
+
+      if (actionId == _actionCompleteAll) {
+        debugPrint('Processing Complete All action');
+        final reminders = await getLocalReminders();
+        final now = DateTime.now();
+        final overdue = reminders.where((r) => r.isActive && r.scheduledTime.isBefore(now)).toList();
+        for (final r in overdue) {
+          await completeReminder(r.id, fallbackReminder: r);
+        }
+        return;
+      }
+
+      if (actionId == _actionReview) {
+        debugPrint('Review action triggered');
+        // App opens automatically
+        return;
+      }
+      
       // If actionId is null, it means the notification body was tapped
       if (actionId == null) {
         debugPrint('Notification body tapped for ID: $id');
@@ -604,4 +643,55 @@ class ReminderService {
     RepeatFrequency.sunday => DateTimeComponents.dayOfWeekAndTime,
     _ => null,
   };
+
+  Future<void> _scheduleDailySummary() async {
+    if (kIsWeb) return;
+    try {
+      final list = await getLocalReminders();
+      final now = DateTime.now();
+      
+      // Target 11:50 PM
+      var scheduledDate = DateTime(now.year, now.month, now.day, 23, 50);
+      
+      // If it's already past 11:50 PM, the "daily" schedule will naturally fall to tomorrow,
+      // but for calculating the initial payload, we check what *will* be overdue.
+      
+      final overdue = list.where((r) => r.isActive && r.scheduledTime.isBefore(scheduledDate)).toList();
+
+      if (overdue.isEmpty) {
+        await _notifications.cancel(_kSummaryNotificationId);
+        return;
+      }
+
+      final count = overdue.length;
+      final titles = overdue.take(3).map((r) => r.title).join(', ');
+      final bodyText = count > 3 ? '$titles and ${count - 3} more' : titles;
+
+      const androidDetails = AndroidNotificationDetails(
+        'summary_channel', 'Daily Summary',
+        channelDescription: 'Daily overdue reminders summary',
+        importance: Importance.max,
+        priority: Priority.high,
+        actions: [
+          AndroidNotificationAction(_actionCompleteAll, 'Complete All', showsUserInterface: false),
+          AndroidNotificationAction(_actionSnoozeAll, 'Snooze All (1h)', showsUserInterface: false),
+          AndroidNotificationAction(_actionReview, 'Review', showsUserInterface: true),
+        ],
+      );
+
+      await _notifications.zonedSchedule(
+        _kSummaryNotificationId,
+        'Overdue Reminders',
+        'You have $count overdue tasks: $bodyText',
+        tz.TZDateTime.from(scheduledDate, tz.local),
+        const NotificationDetails(android: androidDetails),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time,
+        payload: 'overdue_summary',
+      );
+    } catch (e) {
+      debugPrint('Failed to schedule daily summary: $e');
+    }
+  }
 }
