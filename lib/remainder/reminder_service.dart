@@ -290,10 +290,11 @@ class ReminderService {
         : _cachedReminders;
 
     if (listToReschedule.isNotEmpty) {
-      if (!kIsWeb) await _notifications.cancelAll().catchError((_) {});
+      // Don't use cancelAll() as it's too aggressive and clears summary/other notifications
       for (final reminder in listToReschedule.where((r) => r.isActive)) {
         await _scheduleNotification(reminder);
       }
+      await _updateGroupSummary();
     }
 
     // 2. Then background fetch from remote to sync
@@ -303,25 +304,17 @@ class ReminderService {
       
       if (SettingsService.instance.useLocalStorage) {
         final localReminders = await DatabaseService.instance.getAllReminders();
-        // OPTIMIZATION: Check if remote data matches local data exactly to avoid redundant work
         if (listEquals(localReminders, remoteReminders)) {
           debugPrint('Sync skipped: Data matches local cache.');
           return;
         }
 
-        // Sync Logic: Update local with remote data, and remove local items not in remote.
         final remoteIds = remoteReminders.map((r) => r.id).toSet();
-        
-        // Update/Insert all remote reminders into local database
         for (final r in remoteReminders) {
           await DatabaseService.instance.insertReminder(r);
         }
 
-        // Remove local items that are no longer on the sheet
         for (final r in localReminders) {
-          // Only delete locally if it's NOT in the remote AND it was an active reminder.
-          // Inactive (completed) reminders might not be in the remote if the sheet filters them,
-          // so we keep them locally to show in the "Completed" sections.
           if (!remoteIds.contains(r.id) && r.isActive) {
             await DatabaseService.instance.deleteReminder(r.id);
             if (!kIsWeb) await _notifications.cancel(r.id).catchError((_) {});
@@ -333,11 +326,11 @@ class ReminderService {
           ? await DatabaseService.instance.getAllReminders()
           : _cachedReminders;
       
-      if (!kIsWeb) await _notifications.cancelAll().catchError((_) {});
       if (kIsWeb) _startWebDueReminderLoop(updatedList);
       for (final reminder in updatedList.where((r) => r.isActive)) {
         await _scheduleNotification(reminder);
       }
+      await _updateGroupSummary();
       await _scheduleDailySummary();
     } catch (e) {
       debugPrint('Remote sync failed: $e');
@@ -445,10 +438,28 @@ class ReminderService {
 
   Future<void> _scheduleNotification(Reminder r) async {
     if (kIsWeb || !r.isActive) return;
-    final nextTime = _nextScheduleTime(r);
-    if (nextTime == null) return;
+    
+    final now = DateTime.now();
+    // If the reminder is already overdue, show it immediately instead of just scheduling for the future
+    if (r.scheduledTime.isBefore(now)) {
+      await _showImmediateNotification(r);
+      
+      // Also schedule the next occurrence if it's a repeating reminder
+      if (r.repeatFrequency != RepeatFrequency.none) {
+        final nextTime = _nextScheduleTime(r);
+        if (nextTime != null) {
+          await _scheduleZoned(r, nextTime);
+        }
+      }
+      return;
+    }
+
+    await _scheduleZoned(r, r.scheduledTime);
+  }
+
+  Future<void> _scheduleZoned(Reminder r, DateTime scheduledTime) async {
     try {
-      final tzDateTime = tz.TZDateTime.from(nextTime, tz.local);
+      final tzDateTime = tz.TZDateTime.from(scheduledTime, tz.local);
       const androidDetails = AndroidNotificationDetails(
         'reminders_channel', 'Reminders',
         importance: Importance.max, priority: Priority.high,
@@ -463,12 +474,14 @@ class ReminderService {
       await _notifications.zonedSchedule(
         r.id, r.title, r.body, tzDateTime,
         const NotificationDetails(android: androidDetails),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: _matchComponentsFor(r.repeatFrequency),
         payload: jsonEncode(r.toMap()),
       );
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Scheduling failed for ${r.id}: $e');
+    }
   }
 
   Future<void> _showImmediateNotification(Reminder r) async {
@@ -491,6 +504,26 @@ class ReminderService {
         r.body,
         const NotificationDetails(android: androidDetails),
         payload: jsonEncode(r.toMap()),
+      );
+      await _updateGroupSummary();
+    } catch (_) {}
+  }
+
+  Future<void> _updateGroupSummary() async {
+    if (kIsWeb) return;
+    try {
+      const androidDetails = AndroidNotificationDetails(
+        'reminders_channel', 'Reminders',
+        importance: Importance.max, priority: Priority.high,
+        groupKey: 'com.example.kt_remainder_fl.REMINDERS',
+        setAsGroupSummary: true,
+        category: AndroidNotificationCategory.reminder,
+      );
+      await _notifications.show(
+        0, // ID 0 for the group summary
+        'Reminders',
+        'Check your active reminders',
+        const NotificationDetails(android: androidDetails),
       );
     } catch (_) {}
   }
