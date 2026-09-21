@@ -443,14 +443,9 @@ class ReminderService {
     // If the reminder is already overdue, show it immediately instead of just scheduling for the future
     if (r.scheduledTime.isBefore(now)) {
       await _showImmediateNotification(r);
-      
-      // Also schedule the next occurrence if it's a repeating reminder
-      if (r.repeatFrequency != RepeatFrequency.none) {
-        final nextTime = _nextScheduleTime(r);
-        if (nextTime != null) {
-          await _scheduleZoned(r, nextTime);
-        }
-      }
+      // Note: We don't schedule the next occurrence here to avoid ID conflicts
+      // that could clear the active notification. The next occurrence is handled 
+      // when the current one is completed or snoozed.
       return;
     }
 
@@ -492,6 +487,7 @@ class ReminderService {
         importance: Importance.max, priority: Priority.high,
         groupKey: 'com.example.kt_remainder_fl.REMINDERS',
         category: AndroidNotificationCategory.reminder,
+        autoCancel: false, // Prevents clearing when app is opened via launcher
         actions: [
           AndroidNotificationAction(_actionComplete, 'Complete', cancelNotification: true, showsUserInterface: false),
           AndroidNotificationAction(_actionSnooze1h, 'Snooze 1hr', cancelNotification: true, showsUserInterface: false),
@@ -705,6 +701,7 @@ class ReminderService {
         channelDescription: 'Daily overdue reminders summary',
         importance: Importance.max,
         priority: Priority.high,
+        autoCancel: false,
         actions: [
           AndroidNotificationAction(_actionCompleteAll, 'Complete All', showsUserInterface: false),
           AndroidNotificationAction(_actionSnoozeAll, 'Snooze All (1h)', showsUserInterface: false),
