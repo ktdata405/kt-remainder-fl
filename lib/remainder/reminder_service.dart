@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -545,10 +546,19 @@ class ReminderService {
       }
 
       if (actionId == _actionSnooze1h) {
+        final reminderName = payloadReminder?.title ?? 'Reminder';
         await snoozeReminder(
           id,
           by: const Duration(hours: 1),
           fallbackReminder: payloadReminder,
+        );
+        Fluttertoast.showToast(
+          msg: "$reminderName snoozed for 1h",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: const Color(0xFF4F46E5),
+          textColor: const Color(0xFFFFFFFF),
+          fontSize: 16.0
         );
         return;
       }
@@ -562,7 +572,17 @@ class ReminderService {
 
       if (actionId == _actionComplete) {
         debugPrint('Processing Complete action for ID: $id');
+        final reminderName = payloadReminder?.title ?? 'Reminder';
         await completeReminder(id, fallbackReminder: payloadReminder);
+        
+        Fluttertoast.showToast(
+          msg: "$reminderName completed",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: const Color(0xFF4F46E5),
+          textColor: const Color(0xFFFFFFFF),
+          fontSize: 16.0
+        );
         return;
       }
       
@@ -574,6 +594,14 @@ class ReminderService {
         for (final r in overdue) {
           await snoozeReminder(r.id, by: const Duration(hours: 1), fallbackReminder: r);
         }
+        Fluttertoast.showToast(
+          msg: "${overdue.length} reminders snoozed",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: const Color(0xFF4F46E5),
+          textColor: const Color(0xFFFFFFFF),
+          fontSize: 16.0
+        );
         return;
       }
 
@@ -585,6 +613,14 @@ class ReminderService {
         for (final r in overdue) {
           await completeReminder(r.id, fallbackReminder: r);
         }
+        Fluttertoast.showToast(
+          msg: "${overdue.length} reminders completed",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: const Color(0xFF4F46E5),
+          textColor: const Color(0xFFFFFFFF),
+          fontSize: 16.0
+        );
         return;
       }
 

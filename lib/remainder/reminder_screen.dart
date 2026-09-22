@@ -59,6 +59,7 @@ class _ReminderScreenState extends State<ReminderScreen> with WidgetsBindingObse
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _checkPendingSnooze();
+      _reload(backgroundSync: true);
     }
   }
 
