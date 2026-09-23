@@ -23,6 +23,7 @@ const String _actionReview = 'action_review';
 const String _actionSnoozeAll = 'action_snooze_all';
 const String _actionCompleteAll = 'action_complete_all';
 const String _kPendingCustomSnoozeId = 'pending_custom_snooze_id';
+const String _kPendingCompletedReminderIds = 'pending_completed_reminder_ids';
 const int _kSummaryNotificationId = 999999;
 
 @pragma('vm:entry-point')
@@ -138,6 +139,10 @@ class ReminderService {
       debugPrint('Reminder not found: $id');
       return;
     }
+    
+    // 1. Save notification id in SharedPreferences immediately (pending API success)
+    await _addPendingCompletedId(id);
+
     final updated = source.advancedForCompletion();
     
     if (!updated.isActive) {
@@ -150,8 +155,13 @@ class ReminderService {
       _cachedReminders.removeWhere((r) => r.id == updated.id);
       _cachedReminders.add(updated);
       
-      // Await sync to prevent race with UI reload
-      await _upsertRemote(updated).catchError((e) => debugPrint('Sync failed: $e'));
+      try {
+        await _upsertRemote(updated);
+        // After API success message received, remove from SharedPreferences
+        await _removePendingCompletedId(id);
+      } catch (e) {
+        debugPrint('Sync failed: $e');
+      }
       
       _reminderUpdatesController.add(null);
       _scheduleDailySummary();
@@ -167,8 +177,13 @@ class ReminderService {
     _cachedReminders.removeWhere((r) => r.id == updated.id);
     _cachedReminders.add(updated);
 
-    // Await sync to prevent race with UI reload
-    await _upsertRemote(updated).catchError((e) => debugPrint('Sync failed: $e'));
+    try {
+      await _upsertRemote(updated);
+      // After API success message received, remove from SharedPreferences
+      await _removePendingCompletedId(id);
+    } catch (e) {
+      debugPrint('Sync failed: $e');
+    }
     
     _reminderUpdatesController.add(null);
     _scheduleDailySummary();
@@ -244,10 +259,13 @@ class ReminderService {
   }
 
   Future<List<Reminder>> getLocalReminders() async {
+    List<Reminder> list;
     if (!SettingsService.instance.useLocalStorage) {
-      return _cachedReminders;
+      list = _cachedReminders;
+    } else {
+      list = await DatabaseService.instance.getAllReminders();
     }
-    return await DatabaseService.instance.getAllReminders();
+    return await _filterPendingCompleted(list);
   }
 
   Future<List<Reminder>> fetchRemindersFromSheet() async {
@@ -261,7 +279,42 @@ class ReminderService {
     final reminders = rows.map(_mapToReminder).whereType<Reminder>().toList();
     reminders.sort((a, b) => a.scheduledTime.compareTo(b.scheduledTime));
     _cachedReminders = List.from(reminders);
-    return reminders;
+    return await _filterPendingCompleted(reminders);
+  }
+
+  Future<void> _addPendingCompletedId(int id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_kPendingCompletedReminderIds) ?? [];
+    if (!list.contains(id.toString())) {
+      list.add(id.toString());
+      await prefs.setStringList(_kPendingCompletedReminderIds, list);
+    }
+  }
+
+  Future<void> _removePendingCompletedId(int id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_kPendingCompletedReminderIds) ?? [];
+    list.remove(id.toString());
+    await prefs.setStringList(_kPendingCompletedReminderIds, list);
+  }
+
+  Future<List<int>> _getPendingCompletedIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_kPendingCompletedReminderIds) ?? [];
+    return list.map((e) => int.tryParse(e) ?? 0).where((e) => e != 0).toList();
+  }
+
+  Future<List<Reminder>> _filterPendingCompleted(List<Reminder> reminders) async {
+    final pendingIds = await _getPendingCompletedIds();
+    if (pendingIds.isEmpty) return reminders;
+    final now = DateTime.now();
+    return reminders.where((r) {
+      final isOverdue = r.isActive && r.scheduledTime.isBefore(now);
+      if (pendingIds.contains(r.id) && isOverdue) {
+        return false;
+      }
+      return true;
+    }).toList();
   }
 
   Future<void> cancelReminder(int id) async {
@@ -441,12 +494,8 @@ class ReminderService {
     if (kIsWeb || !r.isActive) return;
     
     final now = DateTime.now();
-    // If the reminder is already overdue, show it immediately instead of just scheduling for the future
     if (r.scheduledTime.isBefore(now)) {
-      await _showImmediateNotification(r);
-      // Note: We don't schedule the next occurrence here to avoid ID conflicts
-      // that could clear the active notification. The next occurrence is handled 
-      // when the current one is completed or snoozed.
+      // Overdue reminders should not trigger immediate notifications before 11:50 PM daily summary.
       return;
     }
 
