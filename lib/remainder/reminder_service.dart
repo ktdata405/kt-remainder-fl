@@ -565,12 +565,12 @@ class ReminderService {
         setAsGroupSummary: true,
         category: AndroidNotificationCategory.reminder,
       );
-      await _notifications.show(
+      /*await _notifications.show(
         0, // ID 0 for the group summary
         'Reminders',
         'Check your active reminders',
         const NotificationDetails(android: androidDetails),
-      );
+      );*/
     } catch (_) {}
   }
 
