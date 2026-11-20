@@ -28,6 +28,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
     0xFF171717,
   ];
 
+  Widget _themeCard(ThemeMode mode, IconData icon, String label, ColorScheme cs) {
+    final selected = _settings.themeMode == mode;
+    return InkWell(
+      onTap: () async {
+        await _settings.setThemeMode(mode);
+        setState(() {});
+        widget.onSettingsChanged();
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: selected ? cs.primaryContainer.withOpacity(0.5) : cs.surfaceContainerHighest.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? cs.primary : cs.outlineVariant.withOpacity(0.5),
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: selected ? cs.primary : cs.onSurfaceVariant),
+            const SizedBox(height: 8),
+            Text(label, style: TextStyle(fontWeight: FontWeight.w700, color: selected ? cs.primary : cs.onSurface)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _colorPresetCard(String name, int colorValue, int dotColor) {
+    final selected = _settings.fontColorValue == colorValue;
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: () async {
+        await _settings.setFontColor(colorValue);
+        setState(() {});
+        widget.onSettingsChanged();
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: 100,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected ? cs.primary : cs.outlineVariant.withOpacity(0.5),
+            width: selected ? 2 : 1,
+          ),
+          color: selected ? cs.primaryContainer.withOpacity(0.3) : Colors.transparent,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: Color(dotColor),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(name, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onSurface)),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -54,18 +125,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       const Text('Theme', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       const SizedBox(height: 12),
-                      SegmentedButton<ThemeMode>(
-                        segments: const [
-                          ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.brightness_auto_rounded), label: Text('System')),
-                          ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode_rounded), label: Text('Light')),
-                          ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode_rounded), label: Text('Dark')),
+                      Row(
+                        children: [
+                          Expanded(child: _themeCard(ThemeMode.system, Icons.brightness_auto_rounded, 'System', theme.colorScheme)),
+                          const SizedBox(width: 8),
+                          Expanded(child: _themeCard(ThemeMode.light, Icons.light_mode_rounded, 'Light', theme.colorScheme)),
+                          const SizedBox(width: 8),
+                          Expanded(child: _themeCard(ThemeMode.dark, Icons.dark_mode_rounded, 'Dark', theme.colorScheme)),
                         ],
-                        selected: {_settings.themeMode},
-                        onSelectionChanged: (selection) async {
-                          await _settings.setThemeMode(selection.first);
-                          setState(() {});
-                          widget.onSettingsChanged();
-                        },
                       ),
                     ],
                   ),
@@ -79,7 +146,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     setState(() {});
                   },
                 ),
+                const Divider(height: 1),
+                _DropdownTile<AppUiStyle>(
+                  label: 'UI Theme Style',
+                  value: _settings.uiStyle,
+                  items: const [
+                    DropdownMenuItem(value: AppUiStyle.classic, child: Text('Classic UI')),
+                    DropdownMenuItem(value: AppUiStyle.iphone, child: Text('iOS Reminders')),
+                    DropdownMenuItem(value: AppUiStyle.uplifted, child: Text('Modern Uplift')),
+                  ],
+                  onChanged: (style) async {
+                    if (style != null) {
+                      await _settings.setUiStyle(style);
+                      setState(() {});
+                      widget.onSettingsChanged();
+                    }
+                  },
+                ),
               ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+          const _SectionHeader(label: 'Colors', icon: Icons.color_lens_outlined, color: Colors.teal),
+          _Group(
+            backgroundColor: sectionBg,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Works in light and dark.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      _colorPresetCard('Amber', 0xFFF59E0B, 0xFFF59E0B),
+                      _colorPresetCard('Ocean', 0xFF0D9488, 0xFF0D9488),
+                      _colorPresetCard('Rose', 0xFFEF4444, 0xFFEF4444),
+                      _colorPresetCard('Violet', 0xFF8B5CF6, 0xFF8B5CF6),
+                      _colorPresetCard('Forest', 0xFF10B981, 0xFF10B981),
+                      _colorPresetCard('Slate', 0xFF64748B, 0xFF64748B),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
 
@@ -400,7 +512,7 @@ class _Group extends StatelessWidget {
       decoration: BoxDecoration(
         color: backgroundColor, 
         borderRadius: BorderRadius.circular(20), 
-        border: Border.all(color: Colors.grey.withOpacity(0.1))
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.1))
       ), 
       child: ClipRRect(borderRadius: BorderRadius.circular(20), child: child)
     );

@@ -3,15 +3,15 @@ import '../services/settings_service.dart';
 
 class AppTheme {
   static ThemeData buildTheme(Brightness brightness) {
-    const seedColor = Color(0xFF4F46E5);
+    final s = SettingsService.instance;
+    final customColor = s.fontColorValue;
+    final seedColor = customColor != 0 ? Color(customColor) : const Color(0xFF4F46E5);
     final isDark = brightness == Brightness.dark;
     final cs = ColorScheme.fromSeed(
       seedColor: seedColor,
       brightness: brightness,
       surface: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
     );
-
-    final s = SettingsService.instance;
     
     final titleColor = s.fontColorTitle == 0 
         ? (isDark ? Colors.white : Colors.black) 

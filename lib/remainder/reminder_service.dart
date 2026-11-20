@@ -114,6 +114,7 @@ class ReminderService {
       priority: reminder.priority,
       customInterval: reminder.customInterval,
       customUnit: reminder.customUnit,
+      uiType: reminder.uiType,
     );
     // Offline first: save locally
     if (SettingsService.instance.useLocalStorage) {

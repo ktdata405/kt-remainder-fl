@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'config/app_config.dart';
 import 'config/app_theme.dart';
+import 'iphone_remainder/iphone_reminder_screen.dart';
 import 'remainder/reminder_screen.dart';
+import 'uplift_remainder/uplift_reminder_screen.dart';
 import 'services/settings_service.dart';
 
 void main() async {
@@ -38,19 +40,41 @@ class _ReminderAppState extends State<ReminderApp> {
   @override
   Widget build(BuildContext context) {
     final mode = _settings.themeMode;
+    final isDark = _isDarkMode(mode);
     return MaterialApp(
       title: 'Remainder',
       themeMode: mode,
       theme: AppTheme.buildTheme(Brightness.light),
       darkTheme: AppTheme.buildTheme(Brightness.dark),
       debugShowCheckedModeBanner: false,
-      home: ReminderScreen(
-        webAppUrl: _settings.webAppUrl,
-        isDark: _isDarkMode(mode),
-        onToggleTheme: _toggleTheme,
-        onSettingsChanged: () => setState(() {}),
-      ),
+      home: _buildHome(isDark),
     );
+  }
+
+  Widget _buildHome(bool isDark) {
+    switch (_settings.uiStyle) {
+      case AppUiStyle.iphone:
+        return IphoneReminderScreen(
+          webAppUrl: _settings.webAppUrl,
+          isDark: isDark,
+          onToggleTheme: _toggleTheme,
+          onSettingsChanged: () => setState(() {}),
+        );
+      case AppUiStyle.uplifted:
+        return UpliftReminderScreen(
+          webAppUrl: _settings.webAppUrl,
+          isDark: isDark,
+          onToggleTheme: _toggleTheme,
+          onSettingsChanged: () => setState(() {}),
+        );
+      case AppUiStyle.classic:
+        return ReminderScreen(
+          webAppUrl: _settings.webAppUrl,
+          isDark: isDark,
+          onToggleTheme: _toggleTheme,
+          onSettingsChanged: () => setState(() {}),
+        );
+    }
   }
 
   bool _isDarkMode(ThemeMode mode) {

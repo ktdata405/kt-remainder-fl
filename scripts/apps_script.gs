@@ -13,7 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SHEET_NAME = 'Reminders';
-const HEADERS = ['id', 'title', 'body', 'scheduledTime', 'repeatFrequency', 'isActive', 'priority', 'lastCompleted', 'customInterval', 'customUnit'];
+const HEADERS = ['id', 'title', 'body', 'scheduledTime', 'repeatFrequency', 'isActive', 'priority', 'lastCompleted', 'customInterval', 'customUnit', 'listName', 'uiType'];
 
 function getSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -88,6 +88,8 @@ function fetchReminders() {
         const lastCompletedRaw = get('lastcompleted', 7);
         const customInterval = get('custominterval', 8);
         const customUnit = get('customunit', 9);
+        const listName = String(get('listname', 10) || 'Reminders');
+        const uiType = String(get('uitype', 11) || 'classic');
 
         if (!id || !rawTime) return null;
 
@@ -117,7 +119,9 @@ function fetchReminders() {
           priority: String(priority),
           lastCompleted: lastCompleted,
           customInterval: customInterval !== '' ? Number(customInterval) : null,
-          customUnit: customUnit !== '' ? String(customUnit) : null
+          customUnit: customUnit !== '' ? String(customUnit) : null,
+          listName: listName,
+          uiType: uiType
         };
       } catch (err) {
         return null;
@@ -149,7 +153,9 @@ function upsertReminder(reminder) {
     reminder.priority || 'medium',
     reminder.lastCompleted || '',
     reminder.customInterval || '',
-    reminder.customUnit || ''
+    reminder.customUnit || '',
+    reminder.listName || 'Reminders',
+    reminder.uiType || 'classic'
   ]]);
   return { success: true };
 }

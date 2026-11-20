@@ -21,7 +21,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE reminders(
@@ -34,7 +34,8 @@ class DatabaseService {
             priority TEXT,
             lastCompleted TEXT,
             customInterval INTEGER,
-            customUnit TEXT
+            customUnit TEXT,
+            uiType TEXT
           )
         ''');
       },
@@ -44,6 +45,9 @@ class DatabaseService {
         }
         if (oldVersion < 3) {
           await db.execute('ALTER TABLE reminders ADD COLUMN lastCompleted TEXT');
+        }
+        if (oldVersion < 4) {
+          await db.execute('ALTER TABLE reminders ADD COLUMN uiType TEXT');
         }
       },
     );
@@ -113,6 +117,7 @@ class DatabaseService {
       'lastCompleted': r.lastCompleted?.toIso8601String(),
       'customInterval': r.customInterval,
       'customUnit': r.customUnit,
+      'uiType': r.uiType,
     };
   }
 
@@ -134,6 +139,7 @@ class DatabaseService {
       lastCompleted: map['lastCompleted'] != null ? DateTime.parse(map['lastCompleted']) : null,
       customInterval: map['customInterval'],
       customUnit: map['customUnit'],
+      uiType: map['uiType'],
     );
   }
 }

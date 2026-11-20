@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../remainder/reminder_model.dart';
 
+enum AppUiStyle { classic, iphone, uplifted }
+
 /// Persists all app settings using SharedPreferences.
 class SettingsService extends ChangeNotifier {
   SettingsService._();
@@ -15,6 +17,8 @@ class SettingsService extends ChangeNotifier {
   static const _kShowCancelled     = 'show_cancelled';
   static const _kDefaultLeadMin    = 'default_lead_min';
   static const _kUseLocalStorage   = 'use_local_storage';
+  static const _kUseIphoneUi       = 'use_iphone_ui';
+  static const _kUiStyle           = 'ui_style';
   
   // Font settings
   static const _kFontSizeTitle     = 'font_size_title';
@@ -88,6 +92,34 @@ class SettingsService extends ChangeNotifier {
   bool get useLocalStorage => _prefs?.getBool(_kUseLocalStorage) ?? false;
   Future<void> setUseLocalStorage(bool value) async {
     await _prefs!.setBool(_kUseLocalStorage, value);
+    notifyListeners();
+  }
+
+  bool get useIphoneUi => _prefs?.getBool(_kUseIphoneUi) ?? false;
+  Future<void> setUseIphoneUi(bool value) async {
+    await _prefs!.setBool(_kUseIphoneUi, value);
+    if (value) {
+      await _prefs!.setString(_kUiStyle, AppUiStyle.iphone.name);
+    } else if (uiStyle == AppUiStyle.iphone) {
+      await _prefs!.setString(_kUiStyle, AppUiStyle.classic.name);
+    }
+    notifyListeners();
+  }
+
+  AppUiStyle get uiStyle {
+    final raw = _prefs?.getString(_kUiStyle);
+    if (raw != null) {
+      return AppUiStyle.values.firstWhere((v) => v.name == raw, orElse: () => AppUiStyle.classic);
+    }
+    if (_prefs?.getBool(_kUseIphoneUi) ?? false) {
+      return AppUiStyle.iphone;
+    }
+    return AppUiStyle.classic;
+  }
+
+  Future<void> setUiStyle(AppUiStyle style) async {
+    await _prefs!.setString(_kUiStyle, style.name);
+    await _prefs!.setBool(_kUseIphoneUi, style == AppUiStyle.iphone);
     notifyListeners();
   }
 

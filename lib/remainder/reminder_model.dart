@@ -19,6 +19,7 @@ class Reminder {
   // Custom repeat fields
   final int? customInterval; // e.g., 3
   final String? customUnit;  // 'days', 'weeks', 'months'
+  final String? uiType;      // 'classic', 'iphone', 'uplifted'
 
   Reminder({
     required this.id,
@@ -31,6 +32,7 @@ class Reminder {
     this.lastCompleted,
     this.customInterval,
     this.customUnit,
+    this.uiType,
   });
 
   Map<String, dynamic> toMap() {
@@ -38,13 +40,14 @@ class Reminder {
       'id': id,
       'title': title,
       'body': body,
-      'scheduledTime': scheduledTime.toIso8601String(),
+      'scheduledTime': scheduledTime.toUtc().toIso8601String(),
       'repeatFrequency': repeatFrequency.name,
       'isActive': isActive,
       'priority': priority.name,
-      'lastCompleted': lastCompleted?.toIso8601String(),
+      'lastCompleted': lastCompleted?.toUtc().toIso8601String(),
       'customInterval': customInterval,
       'customUnit': customUnit,
+      'uiType': uiType ?? 'classic',
     };
   }
 
@@ -74,6 +77,7 @@ class Reminder {
       lastCompleted: lastCompletedRaw != null ? DateTime.parse(lastCompletedRaw.toString()) : null,
       customInterval: map['customInterval'] != null ? int.tryParse(map['customInterval'].toString()) : null,
       customUnit: map['customUnit']?.toString(),
+      uiType: map['uiType']?.toString() ?? 'classic',
     );
   }
 
@@ -91,6 +95,7 @@ class Reminder {
         lastCompleted: DateTime.now(),
         customInterval: customInterval,
         customUnit: customUnit,
+        uiType: uiType,
       );
     }
     var next = _stepInterval(scheduledTime);
@@ -108,6 +113,7 @@ class Reminder {
       lastCompleted: DateTime.now(),
       customInterval: customInterval,
       customUnit: customUnit,
+      uiType: uiType,
     );
   }
 
