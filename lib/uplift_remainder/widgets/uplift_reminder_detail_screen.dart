@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import '../../remainder/reminder_model.dart';
 import '../../remainder/reminder_service.dart';
 import '../../services/settings_service.dart';
@@ -81,8 +82,10 @@ class _UpliftReminderDetailScreenState extends State<UpliftReminderDetailScreen>
                 ),
               );
               if (confirm == true) {
+                setState(() => _loading = true);
                 await ReminderService.instance.cancelReminder(_reminder.id);
                 widget.onChanged();
+                Fluttertoast.showToast(msg: 'Reminder deleted');
                 if (context.mounted) Navigator.pop(context);
               }
             },

@@ -178,6 +178,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                 ),
                 const Divider(height: 1),
+                _SwitchTile(
+                  icon: Icons.refresh_rounded,
+                  title: 'Show Refresh Floating Button',
+                  value: _settings.showRefreshFab,
+                  onChanged: (v) async {
+                    await _settings.setShowRefreshFab(v);
+                    setState(() {});
+                    widget.onSettingsChanged();
+                  },
+                ),
+                const Divider(height: 1),
                 _DropdownTile<AppUiStyle>(
                   label: 'UI Theme Style',
                   value: _settings.uiStyle,

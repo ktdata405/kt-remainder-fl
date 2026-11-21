@@ -327,13 +327,13 @@ class ReminderService {
     _cachedReminders.removeWhere((r) => r.id == id);
     _reminderUpdatesController.add(null);
     _scheduleDailySummary();
-    _cancelRemoteById(id).catchError((e) => debugPrint('Sync failed: $e'));
+    await _cancelRemoteById(id).catchError((e) => debugPrint('Sync failed: $e'));
   }
 
   Future<void> _cancelRemoteById(int id) async {
-    final uri = Uri.parse(_webAppUrl).replace(queryParameters: {'action': 'cancel', 'id': id.toString()});
+    final uri = Uri.parse(_webAppUrl).replace(queryParameters: {'action': 'delete', 'id': id.toString()});
     final response = await http.get(uri);
-    if (response.statusCode != 200) throw StateError('Cancel failed: ${response.body}');
+    if (response.statusCode != 200) throw StateError('Delete failed: ${response.body}');
   }
 
   Future<void> rescheduleActiveRemindersFromSheet() async {

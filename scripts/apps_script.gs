@@ -51,6 +51,8 @@ function doGet(e) {
       result = upsertReminder(data);
     } else if (action === 'cancel') {
       result = cancelReminder(Number(e.parameter.id));
+    } else if (action === 'delete') {
+      result = deleteReminderFromSheet(Number(e.parameter.id));
     } else {
       result = { error: 'Unknown action: ' + action };
     }
@@ -169,6 +171,19 @@ function cancelReminder(id) {
   for (let i = 1; i < data.length; i++) {
     if (Number(data[i][0]) === id) {
       sheet.getRange(i + 1, activeCol).setValue('false');
+      return { success: true };
+    }
+  }
+  return { error: 'Reminder not found with id: ' + id };
+}
+
+function deleteReminderFromSheet(id) {
+  const sheet = getSheet();
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (Number(data[i][0]) === Number(id)) {
+      sheet.deleteRow(i + 1);
       return { success: true };
     }
   }

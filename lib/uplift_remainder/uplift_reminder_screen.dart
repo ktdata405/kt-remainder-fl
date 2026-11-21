@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import '../remainder/reminder_model.dart';
 import '../remainder/reminder_service.dart';
 import '../services/settings_service.dart';
@@ -277,46 +278,71 @@ class _UpliftReminderScreenState extends State<UpliftReminderScreen> {
                   ? const Center(child: CircularProgressIndicator())
                   : _mainTab == 1
                       ? _buildCalendarView(cs)
-                      : listItems.isEmpty
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.task_alt_rounded, size: 64, color: _accentColor.withOpacity(0.3)),
-                                  const SizedBox(height: 12),
-                                  Text('No reminders found', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant)),
-                                ],
-                              ),
-                            )
-                          : ListView.builder(
-                              padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-                              itemCount: listItems.length,
-                              itemBuilder: (context, index) {
-                                final item = listItems[index];
-                                if (item is String) {
-                                  return Padding(
-                                    padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
-                                    child: Text(
-                                      item,
-                                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _accentColor),
+                      : RefreshIndicator(
+                          onRefresh: _loadReminders,
+                          child: listItems.isEmpty
+                              ? ListView(
+                                  children: [
+                                    const SizedBox(height: 150),
+                                    Center(
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.task_alt_rounded, size: 64, color: _accentColor.withOpacity(0.3)),
+                                          const SizedBox(height: 12),
+                                          Text('No reminders found', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant)),
+                                        ],
+                                      ),
                                     ),
-                                  );
-                                } else if (item is Reminder) {
-                                  return _buildReminderCard(item, cs);
-                                }
-                                return const SizedBox.shrink();
-                              },
-                            ),
+                                  ],
+                                )
+                              : ListView.builder(
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                                  itemCount: listItems.length,
+                                  itemBuilder: (context, index) {
+                                    final item = listItems[index];
+                                    if (item is String) {
+                                      return Padding(
+                                        padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
+                                        child: Text(
+                                          item,
+                                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _accentColor),
+                                        ),
+                                      );
+                                    } else if (item is Reminder) {
+                                      return _buildReminderCard(item, cs);
+                                    }
+                                    return const SizedBox.shrink();
+                                  },
+                                ),
+                        ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddSheet(context),
-        backgroundColor: _accentColor,
-        foregroundColor: cs.onPrimary,
-        elevation: 4,
-        child: const Icon(Icons.add_rounded, size: 28),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (SettingsService.instance.showRefreshFab) ...[
+            FloatingActionButton.small(
+              onPressed: _loadReminders,
+              backgroundColor: _accentColor,
+              foregroundColor: cs.onPrimary,
+              tooltip: 'Refresh',
+              child: const Icon(Icons.refresh_rounded),
+            ),
+            const SizedBox(height: 12),
+          ],
+          FloatingActionButton(
+            onPressed: () => _showAddSheet(context),
+            backgroundColor: _accentColor,
+            foregroundColor: cs.onPrimary,
+            elevation: 4,
+            child: const Icon(Icons.add_rounded, size: 28),
+          ),
+        ],
       ),
     );
   }
@@ -392,8 +418,8 @@ class _UpliftReminderScreenState extends State<UpliftReminderScreen> {
         borderRadius: BorderRadius.circular(20),
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap: () {
-            Navigator.push(
+          onTap: () async {
+            await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => UpliftReminderDetailScreen(
@@ -402,6 +428,8 @@ class _UpliftReminderScreenState extends State<UpliftReminderScreen> {
                 ),
               ),
             );
+            await _loadReminders();
+            setState(() {});
           },
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -422,6 +450,7 @@ class _UpliftReminderScreenState extends State<UpliftReminderScreen> {
                   onTap: () async {
                     if (r.isActive) {
                       await _service.completeReminder(r.id, fallbackReminder: r);
+                      Fluttertoast.showToast(msg: 'Reminder completed');
                     } else {
                       final updated = Reminder(
                         id: r.id,
@@ -436,8 +465,10 @@ class _UpliftReminderScreenState extends State<UpliftReminderScreen> {
                         uiType: r.uiType,
                       );
                       await _service.scheduleReminder(updated);
+                      Fluttertoast.showToast(msg: 'Reminder marked as active');
                     }
                     await _loadReminders();
+                    setState(() {});
                   },
                   child: Icon(
                     r.isActive ? Icons.radio_button_unchecked_rounded : Icons.check_circle_rounded,

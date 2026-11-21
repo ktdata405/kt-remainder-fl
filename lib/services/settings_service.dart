@@ -20,6 +20,7 @@ class SettingsService extends ChangeNotifier {
   static const _kUseIphoneUi       = 'use_iphone_ui';
   static const _kUiStyle           = 'ui_style';
   static const _kAppIconStyle      = 'app_icon_style';
+  static const _kShowRefreshFab    = 'show_refresh_fab';
   
   // Font settings
   static const _kFontSizeTitle     = 'font_size_title';
@@ -93,6 +94,12 @@ class SettingsService extends ChangeNotifier {
   bool get useLocalStorage => _prefs?.getBool(_kUseLocalStorage) ?? false;
   Future<void> setUseLocalStorage(bool value) async {
     await _prefs!.setBool(_kUseLocalStorage, value);
+    notifyListeners();
+  }
+
+  bool get showRefreshFab => _prefs?.getBool(_kShowRefreshFab) ?? true;
+  Future<void> setShowRefreshFab(bool value) async {
+    await _prefs!.setBool(_kShowRefreshFab, value);
     notifyListeners();
   }
 

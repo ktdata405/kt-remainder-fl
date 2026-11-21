@@ -60,20 +60,22 @@ class _UpliftFullAddScreenState extends State<UpliftFullAddScreen> {
     final isDark = theme.brightness == Brightness.dark;
     final cardBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(widget.initialReminder == null ? 'New reminder' : 'Edit reminder', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            Text('Stored in this phone\'s memory — never uploaded', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-          ],
-        ),
-      ),
+    return Stack(
+      children: [
+        Scaffold(
+          appBar: AppBar(
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.initialReminder == null ? 'New reminder' : 'Edit reminder', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                Text('Stored in this phone\'s memory — never uploaded', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+              ],
+            ),
+          ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -336,6 +338,15 @@ class _UpliftFullAddScreenState extends State<UpliftFullAddScreen> {
           ],
         ),
       ),
+        ),
+        if (_submitting)
+          Container(
+            color: Colors.black.withOpacity(0.4),
+            child: const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            ),
+          ),
+      ],
     );
   }
 
