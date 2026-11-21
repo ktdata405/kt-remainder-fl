@@ -99,6 +99,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _iconStyleCard(String label, String styleKey, IconData icon, Color color) {
+    final selected = _settings.appIconStyle == styleKey;
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: () async {
+        await _settings.setAppIconStyle(styleKey);
+        setState(() {});
+        widget.onSettingsChanged();
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        decoration: BoxDecoration(
+          color: selected ? cs.primaryContainer.withOpacity(0.5) : cs.surfaceContainerHighest.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected ? cs.primary : cs.outlineVariant.withOpacity(0.5),
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 32, color: color),
+            const SizedBox(height: 8),
+            Text(label, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: cs.onSurface), textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -196,6 +227,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
 
           const SizedBox(height: 16),
+          const _SectionHeader(label: 'App Icon Style', icon: Icons.image_rounded, color: Colors.amber),
+          _Group(
+            backgroundColor: sectionBg,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Select App Icon', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _iconStyleCard('Classic Orange', 'orange', Icons.apps_rounded, Colors.orange),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _iconStyleCard('Multi-Color List', 'modern_white', Icons.list_alt_rounded, Colors.teal),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
           _Group(
             backgroundColor: sectionBg,
             child: ExpansionTile(

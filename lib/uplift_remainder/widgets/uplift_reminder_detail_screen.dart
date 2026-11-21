@@ -48,13 +48,6 @@ class _UpliftReminderDetailScreenState extends State<UpliftReminderDetailScreen>
         title: Text(_reminder.title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.share_outlined),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reminder shared')));
-            },
-            tooltip: 'Share',
-          ),
-          IconButton(
             icon: const Icon(Icons.edit_outlined),
             onPressed: () async {
               await Navigator.push(

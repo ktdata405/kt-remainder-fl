@@ -87,31 +87,100 @@ class _UpliftReminderScreenState extends State<UpliftReminderScreen> {
     return '${days[dt.weekday - 1]}, ${dt.day} ${months[dt.month - 1]}';
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+  String _getDateKey(DateTime dt) {
+    final localDt = dt.isUtc ? dt.toLocal() : dt;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(localDt.year, localDt.month, localDt.day);
+    
+    final diff = target.difference(today).inDays;
+    if (diff == 0) return 'Today';
+    if (diff == 1) return 'Tomorrow';
+    if (diff == -1) return 'Yesterday';
+    
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${localDt.day} ${months[localDt.month - 1]} ${localDt.year}';
+  }
 
-    // Filter reminders
-    var filtered = _reminders.where((r) {
+  List<dynamic> _buildListItems() {
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    
+    var list = _reminders.where((r) {
       final localDt = r.scheduledTime.isUtc ? r.scheduledTime.toLocal() : r.scheduledTime;
-      if (_mainTab == 1 && _selectedCalendarDate != null) {
-        // Calendar date filter
+      if (_selectedCalendarDate != null && _mainTab == 1) {
         final sel = _selectedCalendarDate!;
         if (localDt.year != sel.year || localDt.month != sel.month || localDt.day != sel.day) {
           return false;
         }
       }
       if (_subTab == 'today') {
-        final now = DateTime.now();
-        if (localDt.year != now.year || localDt.month != now.month || localDt.day != now.day) {
-          return false;
-        }
+        return localDt.year == todayStart.year && localDt.month == todayStart.month && localDt.day == todayStart.day;
       } else if (_subTab == 'done') {
-        if (r.isActive) return false;
+        return !r.isActive;
       }
       return true;
     }).toList();
+
+    if (_subTab == 'today') {
+      final active = list.where((r) => r.isActive).toList()
+        ..sort((a, b) => a.scheduledTime.compareTo(b.scheduledTime));
+      final completed = list.where((r) => !r.isActive).toList()
+        ..sort((a, b) => (b.lastCompleted ?? b.scheduledTime).compareTo(a.lastCompleted ?? a.scheduledTime));
+      
+      final List<dynamic> items = [];
+      if (active.isNotEmpty) {
+        items.add('In progress');
+        items.addAll(active);
+      }
+      if (completed.isNotEmpty) {
+        items.add('Completed');
+        items.addAll(completed);
+      }
+      return items;
+    } else if (_subTab == 'done') {
+      final completed = List<Reminder>.from(list.where((r) => !r.isActive))
+        ..sort((a, b) => (b.lastCompleted ?? b.scheduledTime).compareTo(a.lastCompleted ?? a.scheduledTime));
+      
+      final Map<String, List<Reminder>> groups = {};
+      for (var r in completed) {
+        final key = _getDateKey(r.lastCompleted ?? r.scheduledTime);
+        groups.putIfAbsent(key, () => []).add(r);
+      }
+      final List<dynamic> items = [];
+      groups.forEach((dateKey, reminders) {
+        items.add(dateKey);
+        items.addAll(reminders);
+      });
+      return items;
+    } else {
+      final active = list.where((r) => r.isActive).toList()
+        ..sort((a, b) {
+          final diffA = a.scheduledTime.difference(now).abs();
+          final diffB = b.scheduledTime.difference(now).abs();
+          return diffA.compareTo(diffB);
+        });
+      final completed = list.where((r) => !r.isActive).toList()
+        ..sort((a, b) => (b.lastCompleted ?? b.scheduledTime).compareTo(a.lastCompleted ?? a.scheduledTime));
+
+      final List<dynamic> items = [];
+      if (active.isNotEmpty) {
+        items.add('To do');
+        items.addAll(active);
+      }
+      if (completed.isNotEmpty) {
+        items.add('Completed');
+        items.addAll(completed);
+      }
+      return items;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final listItems = _buildListItems();
 
     return Scaffold(
       body: SafeArea(
@@ -208,7 +277,7 @@ class _UpliftReminderScreenState extends State<UpliftReminderScreen> {
                   ? const Center(child: CircularProgressIndicator())
                   : _mainTab == 1
                       ? _buildCalendarView(cs)
-                      : filtered.isEmpty
+                      : listItems.isEmpty
                           ? Center(
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -221,10 +290,21 @@ class _UpliftReminderScreenState extends State<UpliftReminderScreen> {
                             )
                           : ListView.builder(
                               padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-                              itemCount: filtered.length,
+                              itemCount: listItems.length,
                               itemBuilder: (context, index) {
-                                final r = filtered[index];
-                                return _buildReminderCard(r, cs);
+                                final item = listItems[index];
+                                if (item is String) {
+                                  return Padding(
+                                    padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
+                                    child: Text(
+                                      item,
+                                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _accentColor),
+                                    ),
+                                  );
+                                } else if (item is Reminder) {
+                                  return _buildReminderCard(item, cs);
+                                }
+                                return const SizedBox.shrink();
                               },
                             ),
             ),
@@ -388,20 +468,20 @@ class _UpliftReminderScreenState extends State<UpliftReminderScreen> {
                     ],
                   ),
                 ),
-                // Share & Snoozed badge
-                IconButton(
-                  icon: const Icon(Icons.share_outlined, size: 18, color: Colors.grey),
-                  onPressed: () {},
-                ),
+                // Status badge
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _accentColor.withOpacity(0.15),
+                    color: r.isActive ? _accentColor.withOpacity(0.15) : const Color(0xFF800000).withOpacity(0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     r.isActive ? 'Active' : 'Done',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _accentColor),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: r.isActive ? _accentColor : const Color(0xFF800000),
+                    ),
                   ),
                 ),
               ],

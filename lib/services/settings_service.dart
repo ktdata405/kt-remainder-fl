@@ -19,6 +19,7 @@ class SettingsService extends ChangeNotifier {
   static const _kUseLocalStorage   = 'use_local_storage';
   static const _kUseIphoneUi       = 'use_iphone_ui';
   static const _kUiStyle           = 'ui_style';
+  static const _kAppIconStyle      = 'app_icon_style';
   
   // Font settings
   static const _kFontSizeTitle     = 'font_size_title';
@@ -120,6 +121,12 @@ class SettingsService extends ChangeNotifier {
   Future<void> setUiStyle(AppUiStyle style) async {
     await _prefs!.setString(_kUiStyle, style.name);
     await _prefs!.setBool(_kUseIphoneUi, style == AppUiStyle.iphone);
+    notifyListeners();
+  }
+
+  String get appIconStyle => _prefs?.getString(_kAppIconStyle) ?? 'orange';
+  Future<void> setAppIconStyle(String style) async {
+    await _prefs!.setString(_kAppIconStyle, style);
     notifyListeners();
   }
 
