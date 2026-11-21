@@ -101,7 +101,7 @@ jobs:
         run: |
           set -o pipefail
           java -version
-          if ! flutter build apk --release --build-name="1.0.${{ github.run_number }}" --build-number=${{ github.run_number }} --verbose 2>&1 | tee build-release.log; then
+          if ! flutter build apk --release --no-tree-shake-icons --build-name="1.0.${{ github.run_number }}" --build-number=${{ github.run_number }} --verbose 2>&1 | tee build-release.log; then
             echo "::group::First FAILURE block (release)"
             awk '/FAILURE: Build failed with an exception\./,0' build-release.log > build-release-failure.log || true
             if [ -s build-release-failure.log ]; then
